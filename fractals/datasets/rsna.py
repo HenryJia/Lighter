@@ -46,7 +46,7 @@ class RSNADataset(Dataset):
         return len(self.id_list)
 
     def __getitem__(self, idx):
-        x_dcm = pydicom.read_file(os.path.join(directory, id_list[idx], '.dcm')
+        x_dcm = pydicom.read_file(os.path.join(directory, id_list[idx], '.dcm'))
 
         x = []
         for keyword, transform in self.features:
@@ -54,4 +54,4 @@ class RSNADataset(Dataset):
 
         y_df = data_df.loc[data_df['patientId'] == id_list[idx]]
         y = torch.from_numpy(y_transforms(y_df))
-        return x
+        return x, y

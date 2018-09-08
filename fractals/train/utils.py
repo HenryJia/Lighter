@@ -28,14 +28,18 @@ def make_queue(loader, maxsize = 10):
 
 
 class ProgressBar(tqdm):
-    '''Displays a progress bar based on combination of tqdm code and Keras' prgress bar code
-    # Arguments
-        total: Total number of steps expected, None if unknown.
-        stateful_metrics: Iterable of string names of metrics that
-            should *not* be averaged over time. Metrics in this list
-            will be displayed as-is. All others will be averaged
-            by the progbar before display.
-    '''
+    """
+    Displays a progress bar based on combination of tqdm code and Keras' prgress bar code
+    Parameters
+    ----------
+    total: int or None
+        Total number of steps expected, None if unknown.
+    stateful_metrics: Iterable of string
+        Iterable of string names of metrics that
+        should *not* be averaged over time. Metrics in this list
+        will be displayed as-is. All others will be averaged
+        by the progbar before display.
+    """
     def __init__(self, total = None, description = None, stateful_metrics = None, **kwargs):
         super(ProgressBar, self).__init__(total = total, **kwargs)
         if description:
@@ -50,15 +54,17 @@ class ProgressBar(tqdm):
         self._values = OrderedDict()
 
     def update(self, n, values):
-        '''Updates the progress bar.
-        # Arguments
-            n: Amount to increase the progress bar by
-            values: Dictionary:
-                `{name : value}`.
-                If `name` is in `stateful_metrics`,
-                `value_for_last_step` will be displayed as-is.
-                Else, an average of the metric over time will be displayed.
-        '''
+        """
+        Updates the progress bar.
+        Parameters
+        ----------
+        n: integer
+            Amount to increase the progress bar by
+        values: Dictionary
+            Dictionary of `{name : value}`.
+            If `name` is in `stateful_metrics`, `value_for_last_step` will be displayed as-is.
+            Else, an average of the metric over time will be displayed.
+        """
         super(ProgressBar, self).update(n)
         values = values or []
         for k in values:

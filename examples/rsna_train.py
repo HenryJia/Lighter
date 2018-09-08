@@ -17,6 +17,7 @@ tqdm.monitor_interval = 0
 
 from fractals.datasets.rsna import RSNADataset, split_validation, GetBbox
 from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize
+from fractals.models.model_lib.rsna import UNet
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_dir', type = str, help = 'Root directory containing the folder with the DICOM files and the csv files')
@@ -45,6 +46,7 @@ image_transforms = Compose([Resize((256, 256)), Numpy2Tensor(), Lambda(lambda x:
 y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256))])
 
 train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
+validation_set = RSNADataset(validation_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 
 #x, y = train_set[2]
 
@@ -54,3 +56,8 @@ train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], 
 #plt.imshow(x[0][0])
 #plt.figure(2)
 #plt.imshow(y[0])
+
+model = UNet().cuda()
+
+#x = torch.zeros(3, 1, 256, 256).cuda()
+#print(model(x).shape)

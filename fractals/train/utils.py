@@ -30,6 +30,7 @@ def make_queue(loader, maxsize = 10):
 class ProgressBar(tqdm):
     """
     Displays a progress bar based on combination of tqdm code and Keras' prgress bar code
+
     Parameters
     ----------
     total: int or None
@@ -55,7 +56,8 @@ class ProgressBar(tqdm):
 
     def update(self, n, values):
         """
-        Updates the progress bar.
+        Updates the progress bar
+
         Parameters
         ----------
         n: integer

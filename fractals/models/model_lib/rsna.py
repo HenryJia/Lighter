@@ -4,6 +4,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Block(nn.Sequential):
+    """
+    Basic convolutional block as a derived class of nn.Sequential
+
+    Parameters
+    ----------
+    dimensions: List/tuple of integers
+        List of filter dimensions of the layers
+    kernel_size: Integer
+        kernel size of all the convolutional layers
+    input_dimension: Integer
+        Channel dimension of the input tensor
+    block_num: Integer
+        The block number of the current block for naming modules
+    """
     def __init__(self, dimensions, kernel_size, input_dimension, block_num = 1):
         super(Block, self).__init__()
         self.dimensions = dimensions

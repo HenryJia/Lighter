@@ -4,12 +4,8 @@ import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 np.random.seed(94103)
 
 import torch
-from torch import Tensor
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Lambda
-from torch.optim import Adam
 
 import tqdm
 from tqdm import tqdm

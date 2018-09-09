@@ -9,22 +9,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.nn import MSELoss
 
-def load_loop(q, loader):
-    for i, (data, targets) in enumerate(loader):
-        data = [d.cuda(non_blocking = True) for d in data]
-        targets = [t.cuda(non_blocking = True) for t in targets]
-        q.put((data, targets))
-        q.task_done()
-
-
-def make_queue(loader, maxsize = 10):
-    data_queue = Queue(maxsize = maxsize)
-    worker = Thread(target = load_loop, args=(data_queue, loader))
-    worker.setDaemon(True)
-    worker.start()
-
-    return data_queue, worker
-
 
 
 class ProgressBar(tqdm):

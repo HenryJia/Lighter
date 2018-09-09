@@ -7,6 +7,27 @@ from torch.utils.data import DataLoader
 
 
 class AsynchronousLoader(object):
+    """
+    Class for asynchronously loading from CPU memory to device memory
+
+    Parameters
+    ----------
+    dataset: PyTorch Dataset
+        The PyTorch dataset we're loading
+    device: PyTorch Device
+        The PyTorch device we are loading to
+    batch_size: Integer
+        The batch size to load in
+    shuffle: Boolean
+        Whether to load the dataset in a random (shuffled) order
+    pin_memory: Boolean
+        Whether to use CUDA pinned memory
+        Note that this should *always* be set to True for asynchronous loading to CUDA devices
+    workers: Integer
+        Number of worker processes to use for loading from storage and collating the batches in CPU memory
+    queue_size: Integer
+        Size of the que used to store the data loaded to the device
+    """
     def __init__(self, dataset, device, batch_size = 1, shuffle = False, pin_memory = True, workers = 10, queue_size = 10):
         self.dataset = dataset
         self.device = device

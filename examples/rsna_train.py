@@ -7,10 +7,6 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Lambda
 
-import tqdm
-from tqdm import tqdm
-tqdm.monitor_interval = 0
-
 from fractals.datasets.rsna import RSNADataset, split_validation, GetBbox
 from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize
 from fractals.models.model_lib.rsna import UNet

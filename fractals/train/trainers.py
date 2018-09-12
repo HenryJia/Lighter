@@ -34,11 +34,11 @@ class Trainer(object):
 
 
     def __next__(self):
-        for c in callbacks:
-            c.epoch_begin()
-        for i, sample in enumerate(loader):
-            out = closure(sample)
-            for c in callbacks:
+        for c in self.callbacks:
+            c.epoch_begin(self)
+        for i, sample in enumerate(self.loader):
+            out = self.closure(sample)
+            for c in self.callbacks:
                 c(out, self, i)
-        for c in callbacks:
-            c.epoch_end()
+        for c in self.callbacks:
+            c.epoch_end(self)

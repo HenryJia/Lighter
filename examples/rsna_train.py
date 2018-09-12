@@ -4,12 +4,17 @@ import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 np.random.seed(94103)
 
 import torch
-from torch.utils.data import DataLoader
+import torch.nn as nn
+from torch.optim import Adam
 from torchvision.transforms import Compose, Lambda
 
 from fractals.datasets.rsna import RSNADataset, split_validation, GetBbox
 from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize
+
 from fractals.models.model_lib.rsna import UNet
+
+from fractals.train import Trainer, AsynchronousLoader, DefaultClosure, ProgBarCallback
+from fractals.train.metrics import Accuracy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_dir', type = str, help = 'Root directory containing the folder with the DICOM files and the csv files')
@@ -35,21 +40,23 @@ print('Head of training dataframes:\n', train_df.head())
 print('Head of validation dataframes:\n', train_df.head())
 
 image_transforms = Compose([Resize((256, 256)), Numpy2Tensor(), Lambda(lambda x: x.float()), Reshape((1, 256, 256)), Normalize(0, 255)])
-y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256))])
+y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256)), Lambda(lambda x: x.float())])
 
 train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 validation_set = RSNADataset(validation_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 
-#x, y = train_set[2]
-
-#import matplotlib.pyplot as plt
-#plt.ion()
-#plt.figure(1)
-#plt.imshow(x[0][0])
-#plt.figure(2)
-#plt.imshow(y[0])
+#sample = train_set[0]
+#print(sample[1][0].shape)
 
 model = UNet().cuda()
+loss = [nn.BCELoss().cuda()]
+optim = Adam(model.parameters(), lr = 3e-4)
+metrics = {}
 
-#x = torch.zeros(3, 1, 256, 256).cuda()
-#print(model(x).shape)
+closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
+loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 128, shuffle = True)
+callbacks = [ProgBarCallback(decription = 'Training', check_queue = True)]
+
+trainer = Trainer(loader, closure, callbacks)
+
+next(trainer)

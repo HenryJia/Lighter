@@ -1,3 +1,6 @@
+from threading import Thread
+from queue import Queue
+
 import torch
 from torch import Tensor
 import torch.nn as nn
@@ -40,12 +43,12 @@ class AsynchronousLoader(object):
         # Use PyTorch's DataLoader for collating samples and stuff since it's nicely written and parallelrised
         self.dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = shuffle, pin_memory = pin_memory, num_workers = workers)
 
-        self.running = False
+        self.idx = 0
 
 
     def load_loop(self): # The loop that will load into the queue in the background
-        for sample in self.loader:
-            q.put(self.load_instance(sample))
+        for sample in self.dataloader:
+            self.queue.put(self.load_instance(sample))
 
 
     def load_instance(self, sample): # Recursive loading for each instance based on torch.utils.data.default_collate
@@ -67,7 +70,7 @@ class AsynchronousLoader(object):
 
     def __next__(self):
         # If we've reached the number of batches to return or the queue is empty and the worker is dead then exit
-        if (not self.worker.worker.is_alive() and queue.empty()) or self.idx >= len(self.dataloader):
+        if (not self.worker.is_alive() and self.queue.empty()) or self.idx >= len(self.dataloader):
             self.idx = 0
             self.queue.join()
             self.worker.join()
@@ -77,3 +80,7 @@ class AsynchronousLoader(object):
             self.queue.task_done()
             self.idx += 1
         return out
+
+
+    def __len__(self):
+        return len(self.dataloader)

@@ -36,7 +36,7 @@ class F1Metric(nn.Module):
 
     def forward(self, out, target):
         intersection = torch.sum(target * out)
-        return (2. * intersection + self.smooth) / (torch.sum(target) + torch.sum(out) + self.smooth)
+        return 2. * intersection / (torch.sum(target) + torch.sum(out) + self.smooth)
 
 
 
@@ -76,7 +76,7 @@ class IOUMetric(nn.Module):
     def forward(self, out, target):
         intersection = torch.sum(target * out)
         union = (torch.sum(target) + torch.sum(out) - intersection + self.smooth) # Inclusion exclusion formula
-        return (intersection + self.smooth) / union
+        return intersection / union
 
 
 
@@ -105,7 +105,7 @@ class BinaryAccuracy(nn.Module):
         super(BinaryAccuracy, self).__init__()
 
     def forward(self, out, target):
-        return torch.mean((out == torch.round(target)).float())
+        return torch.mean((torch.round(out) == target).float())
 
 
 

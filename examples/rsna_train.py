@@ -47,10 +47,19 @@ loss = [F1Loss().cuda()]
 optim = Adam(model.parameters(), lr = 3e-4)
 metrics = [(0, BinaryAccuracy().cuda()), (0, F1Metric().cuda()), (0, IOUMetric().cuda())]
 
-closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
-loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
+train_closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
+validation_closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = False)
+
+train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
+validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
+
 callbacks = [ProgBarCallback(check_queue = True)]
 
-trainer = Trainer(loader, closure, callbacks)
+trainer = Trainer(train_loader, train_closure, callbacks)
+validator = Trainer(validation_loader, validation_closure, callbacks)
 
-next(trainer)
+for i in range(10):
+    print('Training Epoch {}'.format(i))
+    next(trainer)
+    print('Validating Epoch {}'.format(i))
+    next(validator)

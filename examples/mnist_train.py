@@ -41,8 +41,8 @@ metrics = [(0, CategoricalAccuracy().cuda())]#, (0, F1Metric().cuda()), (0, F1Me
 train_closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
 validation_closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = False)
 
-train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 256, shuffle = True)
-validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 256, shuffle = True)
+train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
+validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 
 callbacks = [ProgBarCallback(check_queue = True)]
 

@@ -49,7 +49,7 @@ metrics = [(0, BinaryAccuracy().cuda()), (0, F1Metric().cuda()), (0, IOUMetric()
 
 closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
 loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
-callbacks = [ProgBarCallback(decription = 'Training', check_queue = True)]
+callbacks = [ProgBarCallback(check_queue = True)]
 
 trainer = Trainer(loader, closure, callbacks)
 

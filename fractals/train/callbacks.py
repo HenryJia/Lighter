@@ -84,14 +84,10 @@ class ProgBarCallback(MovingAvgCallback):
     def __call__(self, report, cls, n):
         super(ProgBarCallback, self).__call__(report, cls, n)
 
-        avg = {}
-        for k in self.avg: # We need to convert them into NumPy first or tqdm will also display a load of extra information
-            avg[k] = self.avg[k].detach().cpu().numpy()
-
         if self.check_queue:
-            avg['queue_empty'] = cls.loader.queue.empty()
+            self.avg['queue_empty'] = cls.loader.queue.empty()
 
-        self.pb.set_postfix(**avg)
+        self.pb.set_postfix(**self.avg)
         self.pb.update(1)
 
 

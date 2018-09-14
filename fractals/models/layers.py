@@ -4,28 +4,6 @@ from torch import nn
 from torch.nn.init import xavier_uniform_
 import torch.nn.functional as F
 
-class Conv2d(nn.Conv2d):
-    def reset_parameters(self):
-        xavier_uniform_(self.weight.data)
-        if self.bias is not None:
-            self.bias.data.zero_()
-
-
-
-class ConvTranspose2d(nn.ConvTranspose2d):
-    def reset_parameters(self):
-        xavier_uniform_(self.weight.data)
-        if self.bias is not None:
-            self.bias.data.zero_()
-
-
-
-class Linear(nn.Linear):
-    def reset_parameters(self):
-        xavier_uniform_(self.weight.data)
-        if self.bias is not None:
-            self.bias.data.zero_()
-
 
 
 class Flatten(nn.Module):

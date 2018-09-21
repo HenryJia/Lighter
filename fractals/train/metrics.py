@@ -29,7 +29,7 @@ class F1Metric(nn.Module):
     smooth: float
         Parameter for smoothing the loss function and keeping it differentiable everywhere
     """
-    def __init__(self, smooth = 1):
+    def __init__(self, smooth = 1e-6):
         super(F1Metric, self).__init__()
         self.smooth = smooth
 
@@ -68,7 +68,7 @@ class IOUMetric(nn.Module):
     smooth: float
         Parameter for smoothing the loss function and keeping it differentiable everywhere
     """
-    def __init__(self, smooth = 1):
+    def __init__(self, smooth = 1e-6):
         super(IOUMetric, self).__init__()
         self.smooth = smooth
 

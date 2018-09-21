@@ -94,3 +94,57 @@ class ProgBarCallback(MovingAvgCallback):
     def epoch_end(self, cls):
         super(ProgBarCallback, self).epoch_end(cls)
         self.pb.close()
+
+
+
+class CheckpointCallback(MovingAvgCallback):
+    """
+    Basic callback to save the model every epoch
+
+    Parameters
+    ----------
+    filename: string
+        The location to save the model
+    monitor: string
+        The metric to monitor
+    save_best: boolean
+        Whether to save the best epoch model or just every epoch
+    mode: string
+        Either 'min' or 'max', so that we know whether the goal is to minimise or maximie the metrics when saving the best
+    """
+    def __init__(self, filename, monitor, save_best = False, mode = 'min', **kwargs):
+        super(CheckpointCallback, self).__init__(**kwargs)
+        self.filename = filename
+        self.monitor = monitor
+        self.save_best = save_best
+        self.mode = mode
+        self.prev = None
+
+
+    def epoch_begin(self, cls):
+        super(CheckpointCallback, self).epoch_begin(cls)
+
+
+    #def __call__(self, report, cls, n):
+        #super(CheckpointCallback, self).__call__(report, cls, n)
+
+
+    def epoch_end(self, cls):
+        super(CheckpointCallback, self).epoch_end(cls)
+        current = self.avg[self.monitor]
+        if self.save_best: # Only check if best if we want it to
+            if self.prev is None:
+                pass # If this is the first epoch, ignore, we'll set prev to the current results later
+            else:
+                if self.mode == 'min':
+                    if self.prev < current:
+                        return # If not minimum, then do nothing
+                elif self.mode == 'max':
+                    if self.prev > current:
+                        return # If not maximum, then do nothing
+                else:
+                    raise Exception('mode must be max or min, got {}'.format(self.mode))
+
+        print('Best epoch so far with metric at {} beating previous best at {}, saving model.'.format(current, self.prev))
+        self.prev = current
+        torch.save(cls.closure.model.state_dict(), self.filename)

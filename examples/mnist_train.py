@@ -11,7 +11,8 @@ from torchvision.datasets import MNIST
 
 from fractals.models.layers import Flatten
 
-from fractals.train import Trainer, AsynchronousLoader, DefaultClosure, ProgBarCallback
+from fractals.train import Trainer, AsynchronousLoader, DefaultClosure
+from fractals.train.callbacks import ProgBarCallback, CheckpointCallback
 from fractals.train.metrics import CategoricalAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
 parser = argparse.ArgumentParser()
@@ -44,10 +45,11 @@ validation_closure = DefaultClosure(model = model, losses = loss, optimizer = op
 train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 
-callbacks = [ProgBarCallback(check_queue = True)]
+train_callbacks = [ProgBarCallback(check_queue = True)]
+validation_callback = train_callbacks + [CheckpointCallback('RSNA_UNet.pth', monitor = 'IOUMetric_0', save_best = True, mode = 'max')]
 
-trainer = Trainer(train_loader, train_closure, callbacks)
-validator = Trainer(validation_loader, validation_closure, callbacks)
+trainer = Trainer(train_loader, train_closure, train_callbacks)
+validator = Trainer(validation_loader, validation_closure, validation_callback)
 
 for i in range(10):
     print('Training Epoch {}'.format(i))

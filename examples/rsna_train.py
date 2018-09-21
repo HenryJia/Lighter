@@ -13,7 +13,8 @@ from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Bin
 
 from fractals.models.model_lib.rsna import UNet
 
-from fractals.train import Trainer, AsynchronousLoader, DefaultClosure, ProgBarCallback
+from fractals.train import Trainer, AsynchronousLoader, DefaultClosure
+from fractals.train.callbacks import ProgBarCallback, CheckpointCallback
 from fractals.train.metrics import BinaryAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
 parser = argparse.ArgumentParser()
@@ -53,12 +54,13 @@ validation_closure = DefaultClosure(model = model, losses = loss, optimizer = op
 train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
 validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
 
-callbacks = [ProgBarCallback(check_queue = True)]
+train_callbacks = [ProgBarCallback(check_queue = True)]
+validation_callback = train_callbacks + [CheckpointCallback('RSNA_UNet.pth', monitor = 'IOUMetric_0', save_best = True, mode = 'max')]
 
-trainer = Trainer(train_loader, train_closure, callbacks)
-validator = Trainer(validation_loader, validation_closure, callbacks)
+trainer = Trainer(train_loader, train_closure, train_callbacks)
+validator = Trainer(validation_loader, validation_closure, validation_callback)
 
-for i in range(10):
+for i in range(20):
     print('Training Epoch {}'.format(i))
     next(trainer)
     print('Validating Epoch {}'.format(i))

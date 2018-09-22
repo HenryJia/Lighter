@@ -18,7 +18,7 @@ from fractals.models.model_lib.rsna import UNet
 
 from fractals.train import Trainer, AsynchronousLoader, DefaultClosure
 from fractals.train.callbacks import ProgBarCallback, CheckpointCallback
-from fractals.train.metrics import BinaryAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
+from fractals.train.metrics import CombineLinear, BinaryAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_dir', type = str, help = 'Root directory containing the folder with the DICOM files and the csv files')
@@ -48,7 +48,7 @@ train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], 
 validation_set = RSNADataset(validation_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 
 model = UNet().cuda()
-loss = [F1Loss().cuda()]
+loss = [CombineLinear([F1Loss().cuda(), nn.BCELoss().cuda()], [0.9, 0.1])]
 optim = Adam(model.parameters(), lr = 3e-4)
 metrics = [(0, BinaryAccuracy().cuda()), (0, F1Metric().cuda()), (0, IOUMetric().cuda())]
 

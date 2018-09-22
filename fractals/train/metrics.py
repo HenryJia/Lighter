@@ -5,6 +5,28 @@ import torch.nn.functional as F
 
 
 
+class CombineLinear(nn.Module):
+    """
+    Simple class for combining multiple losses together into one linear
+
+    Paramters
+    ---------
+    losses: list of loss functions
+        List of PyTorch Loss functions to combine
+    weightings: list of floats or 1D NumPy array of floats
+        List of weightings to apply to each loss function
+    """
+    def __init__(self, losses, weights):
+        super(CombineLinear, self).__init__()
+        self.losses = losses
+        self.weights = weights
+
+
+    def forward(self, out, target):
+        return sum([w * l(out, target) for w, l in zip(self.weights, self.losses)]) / sum(self.weights)
+
+
+
 class RMSELoss(nn.MSELoss):
     """
     Simple root mean squared error loss function based on MSELoss
@@ -35,10 +57,8 @@ class F1Metric(nn.Module):
 
 
     def forward(self, out, target):
-        dims = list(range(1, len(out.shape))) # Dimensions to sum over. We use all but the batch dimension
-
-        intersection = torch.sum(target * out, dim = dims)
-        return torch.mean((2. * intersection + self.smooth) / (torch.sum(target, dim = dims) + torch.sum(out, dim = dims) + self.smooth))
+        intersection = torch.sum(target * out)
+        return (2. * intersection + self.smooth) / (torch.sum(target) + torch.sum(out) + self.smooth)
 
 
 
@@ -76,11 +96,9 @@ class IOUMetric(nn.Module):
 
 
     def forward(self, out, target):
-        dims = list(range(1, len(out.shape))) # Dimensions to sum over. We use all but the batch dimension
-
-        intersection = torch.sum(target * out, dim = dims)
-        union = (torch.sum(target, dim = dims) + torch.sum(out, dim = dims) - intersection) # Inclusion exclusion formula
-        return torch.mean((intersection + self.smooth) / (union + self.smooth))
+        intersection = torch.sum(target * out)
+        union = (torch.sum(target) + torch.sum(out) - intersection) # Inclusion exclusion formula
+        return (intersection + self.smooth) / (union + self.smooth)
 
 
 

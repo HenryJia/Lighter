@@ -125,10 +125,6 @@ class CheckpointCallback(MovingAvgCallback):
         super(CheckpointCallback, self).epoch_begin(cls)
 
 
-    #def __call__(self, report, cls, n):
-        #super(CheckpointCallback, self).__call__(report, cls, n)
-
-
     def epoch_end(self, cls):
         super(CheckpointCallback, self).epoch_end(cls)
         current = self.avg[self.monitor]

@@ -1,12 +1,15 @@
 import time, os, sys, argparse
-import numpy as np # linear algebra 
-import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import numpy as np
+import pandas as pd
 np.random.seed(94103)
 
 import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torchvision.transforms import Compose, Lambda
+
+torch.backends.cudnn.deterministic = True
+torch.manual_seed(94103)
 
 from fractals.datasets.rsna import RSNADataset, split_validation, GetBbox
 from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize

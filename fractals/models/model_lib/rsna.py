@@ -31,6 +31,8 @@ class Block(nn.Sequential):
             self.add_module('Conv{}_{}'.format(block_num, i + 1), nn.Conv2d(dimensions[i - 1], dimensions[i], kernel_size, padding = pad))
             self.add_module('LReLU{}_{}'.format(block_num, i + 1), nn.LeakyReLU())
 
+
+
 class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()

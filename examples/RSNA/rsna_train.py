@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--root_dir', type = str, help = 'Root directory containing the folder with the DICOM files and the csv files')
 parser.add_argument('--train_dir', type = str, help = 'Folder containing the training DICOM files')
 parser.add_argument('--train_csv', type = str, help = 'Filename of the csv label file for training')
+parser.add_argument('--epochs', type = int, help = 'Number of epochs to train for')
 
 args = parser.parse_args()
 
@@ -63,7 +64,7 @@ validation_callback = train_callbacks + [CheckpointCallback('RSNA_UNet.pth', mon
 trainer = Trainer(train_loader, train_closure, train_callbacks)
 validator = Trainer(validation_loader, validation_closure, validation_callback)
 
-for i in range(20):
+for i in range(args.epochs):
     print('Training Epoch {}'.format(i))
     next(trainer)
     print('Validating Epoch {}'.format(i))

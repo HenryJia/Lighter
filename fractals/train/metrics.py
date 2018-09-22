@@ -29,14 +29,16 @@ class F1Metric(nn.Module):
     smooth: float
         Parameter for smoothing the loss function and keeping it differentiable everywhere
     """
-    def __init__(self, smooth = 1e-6):
+    def __init__(self, smooth = 1):
         super(F1Metric, self).__init__()
         self.smooth = smooth
 
 
     def forward(self, out, target):
-        intersection = torch.sum(target * out)
-        return 2. * intersection / (torch.sum(target) + torch.sum(out) + self.smooth)
+        dims = list(range(1, len(out.shape))) # Dimensions to sum over. We use all but the batch dimension
+
+        intersection = torch.sum(target * out, dim = dims)
+        return torch.mean((2. * intersection + self.smooth) / (torch.sum(target, dim = dims) + torch.sum(out, dim = dims) + self.smooth))
 
 
 
@@ -68,15 +70,17 @@ class IOUMetric(nn.Module):
     smooth: float
         Parameter for smoothing the loss function and keeping it differentiable everywhere
     """
-    def __init__(self, smooth = 1e-6):
+    def __init__(self, smooth = 1):
         super(IOUMetric, self).__init__()
         self.smooth = smooth
 
 
     def forward(self, out, target):
-        intersection = torch.sum(target * out)
-        union = (torch.sum(target) + torch.sum(out) - intersection + self.smooth) # Inclusion exclusion formula
-        return intersection / union
+        dims = list(range(1, len(out.shape))) # Dimensions to sum over. We use all but the batch dimension
+
+        intersection = torch.sum(target * out, dim = dims)
+        union = (torch.sum(target, dim = dims) + torch.sum(out, dim = dims) - intersection) # Inclusion exclusion formula
+        return torch.mean((intersection + self.smooth) / (union + self.smooth))
 
 
 

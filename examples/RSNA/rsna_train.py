@@ -50,9 +50,9 @@ y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256)), 
 train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 validation_set = RSNADataset(validation_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 
-features = DenseNet(growth_rate = 8, block_config = (4, 8, 16, 32), activation = nn.LeakyReLU(inplace = True), input_channels = 1)
+features = DenseNet(growth_rate = 8, block_config = (4, 8, 16, 32), activation = nn.LeakyReLU(inplace = True), input_channels = 1, drop_rate = 0.5)
 model = nn.Sequential(features,
-                      nn.Conv2d(features.output_channels, 16, kernel_size = 3, padding = 1),
+                      nn.Conv2d(features.output_channels, 16, kernel_size = 1),
                       nn.LeakyReLU(inplace = True),
                       nn.Upsample(size = (256, 256), mode = 'nearest'),
                       nn.Conv2d(16, 1, kernel_size = 3, padding = 1),
@@ -76,6 +76,8 @@ validator = Trainer(validation_loader, validation_closure, validation_callback)
 
 for i in range(args.epochs):
     print('Training Epoch {}'.format(i))
+    model.train()
     next(trainer)
     print('Validating Epoch {}'.format(i))
+    model.eval()
     next(validator)

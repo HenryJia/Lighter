@@ -53,13 +53,14 @@ data_loader = AsynchronousLoader(data_set, device = torch.device('cuda:0'), batc
 
 features = DenseNet(growth_rate = 8, block_config = (4, 8, 16, 32), activation = nn.LeakyReLU(inplace = True), input_channels = 1)
 model = nn.Sequential(features,
-                      nn.Conv2d(features.output_channels, 16, kernel_size = 3, padding = 1),
+                      nn.Conv2d(features.output_channels, 16, kernel_size = 1),
                       nn.LeakyReLU(inplace = True),
                       nn.Upsample(size = (256, 256), mode = 'nearest'),
                       nn.Conv2d(16, 1, kernel_size = 3, padding = 1),
                       nn.Sigmoid()).to(torch.device('cuda:0'))
 
 model.load_state_dict(torch.load(args.model))
+model.eval()
 
 out_df = pd.DataFrame(columns = sample_df.columns)
 

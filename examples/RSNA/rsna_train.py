@@ -58,7 +58,7 @@ model = nn.Sequential(features,
                       nn.Conv2d(16, 1, kernel_size = 3, padding = 1),
                       nn.Sigmoid()).to(torch.device('cuda:0'))
 
-loss = [CombineLinear([F1Loss().cuda(), nn.BCELoss().cuda()], [0.95, 0.05])]
+loss = [CombineLinear([F1Loss().cuda(), nn.BCELoss().cuda()], [0.9, 0.1])]
 optim = Adam(model.parameters(), lr = 3e-4)
 metrics = [(0, BinaryAccuracy().cuda()), (0, F1Metric().cuda()), (0, IOUMetric().cuda())]
 

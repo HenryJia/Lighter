@@ -8,6 +8,7 @@ import cv2
 from skimage import measure
 
 import torch
+from torch import nn
 from torchvision.transforms import Compose, Lambda
 
 torch.backends.cudnn.deterministic = True
@@ -17,6 +18,7 @@ from fractals.datasets.rsna import RSNADataset, split_validation, GetBbox
 from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize
 
 from fractals.models.model_lib.rsna import UNet
+from fractals.models.densenet import DenseNet
 
 from fractals.train import Trainer, AsynchronousLoader, DefaultClosure
 
@@ -49,7 +51,14 @@ y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256)), 
 data_set = RSNADataset(data_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 data_loader = AsynchronousLoader(data_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = False)
 
-model = UNet().cuda()
+features = DenseNet(growth_rate = 8, block_config = (4, 8, 16, 32), activation = nn.LeakyReLU(inplace = True), input_channels = 1)
+model = nn.Sequential(features,
+                      nn.Conv2d(features.output_channels, 16, kernel_size = 3, padding = 1),
+                      nn.LeakyReLU(inplace = True),
+                      nn.Upsample(size = (256, 256), mode = 'nearest'),
+                      nn.Conv2d(16, 1, kernel_size = 3, padding = 1),
+                      nn.Sigmoid()).to(torch.device('cuda:0'))
+
 model.load_state_dict(torch.load(args.model))
 
 out_df = pd.DataFrame(columns = sample_df.columns)

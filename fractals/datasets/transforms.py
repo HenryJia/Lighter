@@ -170,3 +170,41 @@ class Bbox2Binary(Transform):
             out[:, y1:y2, x1:x2] = 1
         return out
 
+
+
+class JointRandomHFlip(Transform):
+    """
+    Simple class to do random horizontal flipping, but jointly for the target mask and the image
+
+    Note this can be used both on images in the format of NumPy arrays or PyTorch tensors
+
+    Parameters
+    ----------
+    p: Float
+        Probability of flipping horizontally
+    """
+    def __init__(self, p):
+        self.p = p
+
+
+    def flip(self, data):
+        if torch.is_tensor(data):
+            return data.flip(2)
+        elif type(data) is np.ndarray:
+            return data[:, :, ::-1]
+        else:
+            return [self.flip(d) for d in data]
+
+
+    def __call__(self, data):
+        if np.random.rand() < self.p:
+            return self.flip(data)
+        else:
+            return data
+
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        format_string += 'p={0}'.format(self.p)
+        format_string += ')'
+        return format_string

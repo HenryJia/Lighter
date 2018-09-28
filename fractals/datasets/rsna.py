@@ -33,12 +33,13 @@ class RSNADataset(Dataset):
         All  transformations should return a NumPy array
     """
 
-    def __init__(self, data_df, data_dir, features, y_transforms):
+    def __init__(self, data_df, data_dir, features, y_transforms, joint_transforms = None):
         super(RSNADataset, self).__init__()
         self.data_df = data_df
         self.data_dir = data_dir
         self.features = features
         self.y_transforms = y_transforms
+        self.joint_transforms = joint_transforms
 
         self.id_list = data_df['patientId'].unique().tolist()
 
@@ -58,6 +59,8 @@ class RSNADataset(Dataset):
         y = self.y_transforms(y_df)
         if torch.is_tensor(y):
             y = [y]
+        if self.joint_transforms:
+            x, y = self.joint_transforms([x, y])
         return x, y
 
 

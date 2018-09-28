@@ -48,6 +48,8 @@ print('Head of data dataframes:\n', data_df.head())
 
 image_transforms = Compose([Resize((256, 256)), Numpy2Tensor(), Lambda(lambda x: x.float()), Reshape((1, 256, 256)), Normalize(0, 255)])
 y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256)), Lambda(lambda x: x.float())])
+
+
 data_set = RSNADataset(data_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 data_loader = AsynchronousLoader(data_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = False)
 

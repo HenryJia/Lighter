@@ -13,7 +13,7 @@ torch.backends.cudnn.deterministic = True
 torch.manual_seed(94103)
 
 from fractals.datasets.rsna import RSNADataset, split_validation, GetBbox
-from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize
+from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize, JointRandomHFlip
 
 from fractals.models.model_lib.rsna import UNet
 from fractals.models.densenet import DenseNet
@@ -46,11 +46,12 @@ print('Head of validation dataframes:\n', train_df.head())
 
 image_transforms = Compose([Resize((256, 256)), Numpy2Tensor(), Lambda(lambda x: x.float()), Reshape((1, 256, 256)), Normalize(0, 255)])
 y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256)), Lambda(lambda x: x.float())])
+aug_transforms = JointRandomHFlip(p = 0.5)
 
-train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
+train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms, aug_transforms)
 validation_set = RSNADataset(validation_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
 
-features = DenseNet(growth_rate = 8, block_config = (4, 8, 16, 32), activation = nn.LeakyReLU(inplace = True), input_channels = 1, drop_rate = 0.5)
+features = DenseNet(growth_rate = 8, block_config = (4, 8, 16, 32), activation = nn.LeakyReLU(inplace = True), input_channels = 1)
 model = nn.Sequential(features,
                       nn.Conv2d(features.output_channels, 16, kernel_size = 1),
                       nn.LeakyReLU(inplace = True),
@@ -58,7 +59,7 @@ model = nn.Sequential(features,
                       nn.Conv2d(16, 1, kernel_size = 3, padding = 1),
                       nn.Sigmoid()).to(torch.device('cuda:0'))
 
-loss = [CombineLinear([F1Loss().cuda(), nn.BCELoss().cuda()], [0.9, 0.1])]
+loss = [CombineLinear([IOULoss().cuda(), nn.BCELoss().cuda()], [1 - 1e-4, 1e-4])]
 optim = Adam(model.parameters(), lr = 3e-4)
 metrics = [(0, BinaryAccuracy().cuda()), (0, F1Metric().cuda()), (0, IOUMetric().cuda())]
 

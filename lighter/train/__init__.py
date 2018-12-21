@@ -1,3 +1,3 @@
-from fractals.train.trainers import Trainer
-from fractals.train.loaders import AsynchronousLoader
-from fractals.train.closures import DefaultClosure
+from .trainers import Trainer
+from .loaders import AsynchronousLoader
+from .closures import DefaultClosure

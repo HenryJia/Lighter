@@ -9,11 +9,11 @@ from torch.optim import Adam
 from torchvision.transforms import ToTensor
 from torchvision.datasets import MNIST
 
-from fractals.models.layers import Flatten
+from lighter.models.layers import Flatten
 
-from fractals.train import Trainer, AsynchronousLoader, DefaultClosure
-from fractals.train.callbacks import ProgBarCallback, CheckpointCallback
-from fractals.train.metrics import CategoricalAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
+from lighter.train import Trainer, AsynchronousLoader, DefaultClosure
+from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
+from lighter.train.metrics import CategoricalAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_dir', type = str, help = 'Root directory containing the folder with the DICOM files and the csv files')

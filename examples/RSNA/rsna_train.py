@@ -12,15 +12,15 @@ from torchvision.transforms import Compose, Lambda
 torch.backends.cudnn.deterministic = True
 torch.manual_seed(94103)
 
-from fractals.datasets.rsna import RSNADataset, split_validation, GetBbox
-from fractals.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize, JointRandomHFlip
+from lighter.datasets.rsna import RSNADataset, split_validation, GetBbox
+from lighter.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize, JointRandomHFlip
 
-from fractals.models.model_lib.rsna import UNet
-from fractals.models.densenet import DenseNet
+from lighter.models.model_lib.rsna import UNet
+from lighter.models.densenet import DenseNet
 
-from fractals.train import Trainer, AsynchronousLoader, DefaultClosure
-from fractals.train.callbacks import ProgBarCallback, CheckpointCallback
-from fractals.train.metrics import CombineLinear, BinaryAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
+from lighter.train import Trainer, AsynchronousLoader, DefaultClosure
+from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
+from lighter.train.metrics import CombineLinear, BinaryAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_dir', required = True, type = str, help = 'Root directory containing the folder with the DICOM files and the csv files')

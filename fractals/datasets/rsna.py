@@ -24,7 +24,7 @@ class RSNADataset(Dataset):
         Currently this is unused by the class
     data_dir: String
         directory containing the dcm files
-    features: List
+    x_transforms: List
         A list of tuples containing the keyword of the feature to extract from the DICOM file and the corresponding transformation to apply
         All transformations should return a NumPy array
     y_transforms:
@@ -33,11 +33,11 @@ class RSNADataset(Dataset):
         All  transformations should return a NumPy array
     """
 
-    def __init__(self, data_df, data_dir, features, y_transforms, joint_transforms = None):
+    def __init__(self, data_df, data_dir, x_transforms, y_transforms, joint_transforms = None):
         super(RSNADataset, self).__init__()
         self.data_df = data_df
         self.data_dir = data_dir
-        self.features = features
+        self.x_transforms = x_transforms
         self.y_transforms = y_transforms
         self.joint_transforms = joint_transforms
 
@@ -52,7 +52,7 @@ class RSNADataset(Dataset):
         x_dcm = pydicom.read_file(os.path.join(self.data_dir, self.id_list[idx] + '.dcm'))
 
         x = []
-        for keyword, transform in self.features:
+        for keyword, transform in self.x_transforms:
             x += [transform(x_dcm.get(keyword))]
 
         y_df = self.data_df.loc[self.data_df['patientId'] == self.id_list[idx]]
@@ -81,7 +81,7 @@ def split_validation(data_df, proportion): # Simple function to split the Pandas
 
 class GetBbox(object):
     """
-    Simple class to convert Pandas Dataframe to a NumPy array of coordinate pairs for the bounding boxes
+    Simple class to convert Pandas Dataframe to a NumPy array of coordinates and width/height for the bounding boxes
     """
     def __call__(self, df):
         bbox_df = df[['x', 'y', 'width', 'height']]
@@ -89,5 +89,4 @@ class GetBbox(object):
             return torch.ones(1) - 2 # To signal that there is no bounding box
 
         bbox = bbox_df.values
-        bbox[:, 2:] += bbox[:, :2] # We use 2 coordinates instead of 1 coordinate and width/height
         return torch.from_numpy(bbox)

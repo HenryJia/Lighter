@@ -43,6 +43,13 @@ class DefaultClosure(object):
         self.train = train
 
 
+    def unload_instance(self, sample): # Recursive unloading for each instance based on torch.utils.data.default_collate
+        if torch.is_tensor(sample):
+            return sample.detach().cpu().numpy()
+        else:
+            return [self.load_instance(s) for s in sample]
+
+
     def __call__(self, sample):
         data, targets = sample
 
@@ -63,7 +70,8 @@ class DefaultClosure(object):
             self.optimizer.step()
 
         metrics = [('{}_{}'.format(m.__class__.__name__, idx), m(out[idx], targets[idx]).detach().cpu().numpy()) for (idx, m) in self.metrics]
-        out = [('output_{}'.format(idx), o.detach().cpu().numpy()) for idx, o in enumerate(out)]
+        # In case the output has some nested structure, we unload to NumPy recursively
+        out = [('output_{}'.format(idx), unload_instance(o)) for idx, o in enumerate(out)]
         losses = [(name, loss.detach().cpu().numpy()) for (name, loss) in losses]
 
         return ClosureReport(outputs = dict(out), losses = dict(losses), metrics = dict(metrics))

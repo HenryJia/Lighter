@@ -109,6 +109,36 @@ class Resize(Transform):
 
 
 
+class Permute(Transform):
+    """
+    Resizes NumPy or PyTorch arrays/tensors as required
+
+    Useful for changing image dimension order
+
+    Parameters
+    ----------
+    dims: Tuple of integers
+        Dimension order to transpose to
+    """
+    def __init__(self, dims):
+        self.dims = dims
+
+
+    def __call__(self, x):
+        if torch.is_tensor(x):
+            return x.permute(*self.dims)
+        elif type(x) is np.ndarray:
+            return np.transpose(x, self.dims)
+
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        format_string += 'dims={0}'.format(self.dims)
+        format_string += ')'
+        return format_string
+
+
+
 class Normalize(Transform):
     """
     Normalize PyTorch tensors as required
@@ -166,8 +196,8 @@ class Bbox2Binary(Transform):
         bbox[:, 1::2] *= self.size[1]
         bbox = bbox.round().long()
         for i in range(bbox.shape[0]):
-            x1, y1, x2, y2 = bbox[i, 0], bbox[i, 1], bbox[i, 2], bbox[i, 3]
-            out[:, y1:y2, x1:x2] = 1
+            x, y, w, h = bbox[i, 0], bbox[i, 1], bbox[i, 2], bbox[i, 3]
+            out[:, y:y + h, x:x + w] = 1
         return out
 
 

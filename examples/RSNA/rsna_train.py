@@ -44,12 +44,12 @@ print('Validation dataframe lengths:\n', len(validation_df))
 print('Head of training dataframes:\n', train_df.head())
 print('Head of validation dataframes:\n', train_df.head())
 
-image_transforms = Compose([Resize((256, 256)), Numpy2Tensor(), Lambda(lambda x: x.float()), Reshape((1, 256, 256)), Normalize(0, 255)])
+x_transforms = Compose([Resize((256, 256)), Numpy2Tensor(), Lambda(lambda x: x.float()), Reshape((1, 256, 256)), Normalize(0, 255)])
 y_transforms = Compose([GetBbox(), Normalize(0, 1024), Bbox2Binary((256, 256)), Lambda(lambda x: x.float())])
 aug_transforms = JointRandomHFlip(p = 0.5)
 
-train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms, aug_transforms)
-validation_set = RSNADataset(validation_df, dcm_dir, [('pixel_array', image_transforms)], y_transforms)
+train_set = RSNADataset(train_df, dcm_dir, [('pixel_array', x_transforms)], y_transforms, aug_transforms)
+validation_set = RSNADataset(validation_df, dcm_dir, [('pixel_array', x_transforms)], y_transforms)
 
 features = DenseNet(growth_rate = 8, block_config = (4, 8, 16, 32), activation = nn.LeakyReLU(inplace = True), input_channels = 1)
 model = nn.Sequential(features,

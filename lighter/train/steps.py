@@ -6,17 +6,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
-@dataclass(frozen = True)
-class ClosureReport(object):
-    outputs: dict
-    losses: dict
-    metrics: dict
 
-
-
-class DefaultClosure(object):
+class DefaultStep(object):
     """
     The default closure class that runs basic supervised training
+
+    When called, it will return a dictionary of {outputs, losses
 
     Parameters
     ----------
@@ -29,33 +24,37 @@ class DefaultClosure(object):
         If multiple loss functions are required for an output, they can be composed into a single loss function beforehand
     optimizer: PyTorch optimizer
         The PyTorch optimizer we're using
-    metrics: List of (idx, PyTorch metric)
-        A list of tuples of output indexes and the PyTorch metrics we're applying to them
-        We use a list of tuple pairs rather than a dictionary as to allow multiple metrics to be applied to the same output
     train: Boolean
         Whether we are training or evaluating
     """
-    def __init__(self, model, losses, optimizer, metrics, train = True):
+    def __init__(self, model, losses, optimizer, train = True):
         self.model = model
         self.losses = losses
         self.optimizer = optimizer
-        self.metrics = metrics
         self.train = train
 
 
-    def unload_instance(self, sample): # Recursive unloading for each instance based on torch.utils.data.default_collate
+    #def unload_instance(self, sample): # Recursive unloading for each instance based on torch.utils.data.default_collate
+        #if torch.is_tensor(sample):
+            #return sample.detach().cpu().numpy()
+        #else:
+            #return [self.load_instance(s) for s in sample]
+
+
+    def detach_instance(self, sample): # Recursive detaching gradients for each instance based on torch.utils.data.default_collate
         if torch.is_tensor(sample):
-            return sample.detach().cpu().numpy()
+            return sample.detach()
         else:
-            return [self.load_instance(s) for s in sample]
+            return [self.detach_instance(s) for s in sample]
 
 
-    def __call__(self, sample):
+    def __call__(self, engine, sample):
         data, targets = sample
 
         data = [data] if torch.is_tensor(data) else data
         targets = [targets] if torch.is_tensor(targets) else targets
 
+        self.model.train(self.train) # Set the training mode
         out = self.model(*data)
 
         out = [out] if torch.is_tensor(out) else out
@@ -69,9 +68,12 @@ class DefaultClosure(object):
             total_loss.backward()
             self.optimizer.step()
 
-        metrics = [('{}_{}'.format(m.__class__.__name__, idx), m(out[idx], targets[idx]).detach().cpu().numpy()) for (idx, m) in self.metrics]
         # In case the output has some nested structure, we unload to NumPy recursively
-        out = [('output_{}'.format(idx), unload_instance(o)) for idx, o in enumerate(out)]
-        losses = [(name, loss.detach().cpu().numpy()) for (name, loss) in losses]
+        #out = [('output_{}'.format(idx), self.unload_instance(o)) for idx, o in enumerate(out)]
 
-        return ClosureReport(outputs = dict(out), losses = dict(losses), metrics = dict(metrics))
+        # In case the output has some nested structure, we detach gradients recursively
+        # We output the prediction and target pairs so we can pass it on to ignite metrics
+        out_pairs = [('output_{}'.format(idx), self.detach_instance([o, t])) for idx, (o, t) in enumerate(zip(out, targets))]
+        losses = [(name, loss.item()) for (name, loss) in losses]
+
+        return {'out_pairs' : dict(out_pairs), 'losses' : dict(losses)}

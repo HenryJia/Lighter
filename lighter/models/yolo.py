@@ -59,4 +59,4 @@ class YOLOClassifier(nn.Module):
         # Change to (num_batches, num_anchors, height, width, num_classes)
         out_class = out_class.view(num_batches, -1, self.num_classes, height, width).permute(0, 1, 3, 4, 2)
 
-        return [[out_xy, out_wh, out_confidence, out_class]] # Double list wrap so closure treats it as 1 output
+        return [[out_xy, out_wh, out_confidence, out_class]] # Double list wrap so step treats it as 1 output

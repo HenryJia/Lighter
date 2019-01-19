@@ -7,16 +7,16 @@ import torch.nn.functional as F
 from torch.optim import Adam
 
 @dataclass(frozen = True)
-class ClosureReport(object):
+class StepReport(object):
     outputs: dict
     losses: dict
     metrics: dict
 
-
-
-class DefaultClosure(object):
+class DefaultStep(object):
     """
-    The default closure class that runs basic supervised training
+    The default step class that runs basic supervised training
+
+    Returns a StepReport containing the outputs of the model, the losses and the metrics
 
     Parameters
     ----------
@@ -56,6 +56,7 @@ class DefaultClosure(object):
         data = [data] if torch.is_tensor(data) else data
         targets = [targets] if torch.is_tensor(targets) else targets
 
+        self.model.train(self.train) # Set the training mode
         out = self.model(*data)
 
         out = [out] if torch.is_tensor(out) else out
@@ -69,9 +70,14 @@ class DefaultClosure(object):
             total_loss.backward()
             self.optimizer.step()
 
-        metrics = [('{}_{}'.format(m.__class__.__name__, idx), m(out[idx], targets[idx]).detach().cpu().numpy()) for (idx, m) in self.metrics]
-        # In case the output has some nested structure, we unload to NumPy recursively
-        out = [('output_{}'.format(idx), unload_instance(o)) for idx, o in enumerate(out)]
-        losses = [(name, loss.detach().cpu().numpy()) for (name, loss) in losses]
+        with torch.no_grad():
+            # Compute the metrics
+            metrics = [('{}_{}'.format(m.__class__.__name__, idx), m(out[idx], targets[idx]).item()) for (idx, m) in self.metrics]
 
-        return ClosureReport(outputs = dict(out), losses = dict(losses), metrics = dict(metrics))
+            # In case the output has some nested structure, we unload to NumPy recursively
+            out = [('output_{}'.format(idx), self.unload_instance(o)) for idx, o in enumerate(out)]
+
+            # Use .items to get just the number instead of converting to numpy
+            losses = [(name, loss.item()) for (name, loss) in losses]
+
+        return StepReport(outputs = dict(out), losses = dict(losses), metrics = dict(metrics))

@@ -143,4 +143,4 @@ class CheckpointCallback(MovingAvgCallback):
 
         print('Best epoch so far with metric at {} beating previous best at {}, saving model.'.format(current, self.prev))
         self.prev = current
-        torch.save(cls.closure.model.state_dict(), self.filename)
+        torch.save(cls.step.model.state_dict(), self.filename)

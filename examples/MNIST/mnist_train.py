@@ -11,7 +11,7 @@ from torchvision.datasets import MNIST
 
 from lighter.models.layers import Flatten
 
-from lighter.train import Trainer, AsynchronousLoader, DefaultClosure
+from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
@@ -37,21 +37,21 @@ model = nn.Sequential(nn.Conv2d(1, 16, 3, padding = 1),
 
 loss = [nn.NLLLoss().cuda()]
 optim = Adam(model.parameters(), lr = 3e-4)
-metrics = [(0, CategoricalAccuracy().cuda())]#, (0, F1Metric().cuda()), (0, F1Metric().cuda()), (0, IOUMetric().cuda())]
+metrics = [(0, CategoricalAccuracy().cuda())]
 
-train_closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
-validation_closure = DefaultClosure(model = model, losses = loss, optimizer = optim, metrics = metrics, train = False)
+train_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
+validation_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, train = False)
 
 train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 
 train_callbacks = [ProgBarCallback(check_queue = True)]
-validation_callback = train_callbacks + [CheckpointCallback('RSNA_UNet.pth', monitor = 'IOUMetric_0', save_best = True, mode = 'max')]
+validation_callback = train_callbacks + [CheckpointCallback('mnist.pth', monitor = 'CategoricalAccuracy_0', save_best = True, mode = 'max')]
 
-trainer = Trainer(train_loader, train_closure, train_callbacks)
-validator = Trainer(validation_loader, validation_closure, validation_callback)
+trainer = Trainer(train_loader, train_step, train_callbacks)
+validator = Trainer(validation_loader, validation_step, validation_callback)
 
-for i in range(10):
+for i in range(20):
     print('Training Epoch {}'.format(i))
     next(trainer)
     print('Validating Epoch {}'.format(i))

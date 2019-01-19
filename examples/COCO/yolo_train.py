@@ -26,7 +26,7 @@ from lighter.datasets.transforms import Numpy2Tensor, Reshape, Permute, Resize, 
 from lighter.models.densenet import DenseNet
 from lighter.models.yolo import YOLOClassifier
 
-from lighter.train import Trainer, AsynchronousLoader, DefaultClosure
+from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CombineLinear, BinaryAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 

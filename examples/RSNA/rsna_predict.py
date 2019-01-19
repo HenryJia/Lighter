@@ -20,7 +20,7 @@ from lighter.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Bina
 from lighter.models.model_lib.rsna import UNet
 from lighter.models.densenet import DenseNet
 
-from lighter.train import Trainer, AsynchronousLoader, DefaultClosure
+from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 
 from tqdm import tqdm
 

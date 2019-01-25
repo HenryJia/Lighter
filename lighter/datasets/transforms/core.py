@@ -1,12 +1,20 @@
-import numpy as np
+from time import time
+from pathlib import Path
+import random, os, warnings
+from collections import OrderedDict
 
-import cv2
+import numpy as np
+import scipy.io.wavfile
+import scipy.signal
 
 import torch
+
+
 
 class Transform(object):
     """
         Base class for all transformation
+        Neither PyTorch, nor torchvision actually has a base class so we will define our own
     """
     def __repr__(self):
         return self.__class__.__name__ + '()'
@@ -79,39 +87,9 @@ class Reshape(Transform):
 
 
 
-class Resize(Transform):
-    """
-    Resizes NumPy images as required
-
-    Parameters
-    ----------
-    size: tuple of integers
-        Size to resize all input to
-    interpolation: OpenCV Interpolation flag
-        Which type of interpolation to use
-        The default is bilinear (cv2.INTER_LINEAR)
-    """
-    def __init__(self, size, interpolation = cv2.INTER_LINEAR):
-        self.size = size
-        self.interpolation = interpolation
-
-
-    def __call__(self, x):
-        return cv2.resize(x, self.size, interpolation = self.interpolation)
-
-
-    def __repr__(self):
-        format_string = self.__class__.__name__ + '('
-        format_string += 'size={0}, '.format(self.size)
-        format_string += 'interpolation={0}'.format(self.interpolation)
-        format_string += ')'
-        return format_string
-
-
-
 class Permute(Transform):
     """
-    Resizes NumPy or PyTorch arrays/tensors as required
+    Permute NumPy or PyTorch arrays/tensors as required
 
     Useful for changing image dimension order
 
@@ -175,30 +153,39 @@ class Normalize(Transform):
 
 
 
-class Bbox2Binary(Transform):
+class FixedLengthPad1D(Transform):
     """
-    Convert NumPy or PyTorch bounding boxes to binary mask
-    Note bounding boxes must be normalized between 0 and 1
+    Transform for padding a sequences a fixed length
 
     Parameters
     ----------
-    size: tuple of integers
-        Size of the output
+    text_dir: String
+        Directory of the text files we want to do this on
+    left: Bool
+        Whether to pad on the left or the right side
     """
-    def __init__(self, size):
-        self.size = size
+    def __init__(self, length, left = False):
+        self.length = length
+        self.left = left
 
-    def __call__(self, bbox):
-        out = torch.zeros((1, ) + self.size).long()
-        if bbox is None or (bbox < 0).any() or (bbox > 1).any():
-            return out
-        bbox[:, ::2] *= self.size[0]
-        bbox[:, 1::2] *= self.size[1]
-        bbox = bbox.round().long()
-        for i in range(bbox.shape[0]):
-            x, y, w, h = bbox[i, 0], bbox[i, 1], bbox[i, 2], bbox[i, 3]
-            out[:, y:y + h, x:x + w] = 1
-        return out
+
+    def __call__(self, x): # We expect inputs in the format of (timesteps, dims)
+        if x.shape[0] > self.length:
+            raise ValueError('Input cannot have bigger dimension 0 than our set length!')
+        elif x.shape[0] == self.length: # Nothing to do here, we're already at the right length
+            return x
+        else:
+            if self.left:
+                return np.append(np.zeros((self.length - x.shape[0], x.shape[1])), x, axis = 0)
+            else:
+                return np.append(x, np.zeros((self.length - x.shape[0], x.shape[1])), axis = 0)
+
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        format_string += 'length={0}'.format(self.length)
+        format_string += ')'
+        return format_string
 
 
 

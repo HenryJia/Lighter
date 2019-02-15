@@ -59,10 +59,10 @@ class Word2Vec(Transform):
 
     def __call__(self, x): # We expect the input to be a string of sentences
         # Don't need to split it into sentences then into words, tokenising every word is enough
-        sentences = word_tokenize(x.lower())
+        sentence = word_tokenize(x.lower())
 
-        out = np.zeros((len(x), self.dim), dtype = np.float32)
-        for i, w in enumerate(sentences):
+        out = np.zeros((len(sentence), self.dim), dtype = np.float32)
+        for i, w in enumerate(sentence):
             out[i] = self.model[w]
         return out
 
@@ -82,3 +82,14 @@ class Word2Vec(Transform):
         format_string += 'workers={0}'.format(self.workers)
         format_string += ')'
         return format_string
+
+
+
+class Char2Vec(Transform):
+    def __call__(self, x):
+        out = np.zeros((len(x), 256), dtype = np.float32) # Fix dimensionality to 256 for 8bit ASCII
+
+        for i, c in enumerate(x):
+            out[i, ord(c)] = 1 # Convert to 1 hot
+
+        return out

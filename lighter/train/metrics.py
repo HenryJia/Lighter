@@ -141,13 +141,37 @@ class CategoricalAccuracy(nn.Module):
     ----------
     dim: integer
         The dimension to calculate the accuracy across
+    one_hot: Bool
+        Whether the data is in one hot format or not
     """
-    def __init__(self, dim = 1):
+    def __init__(self, dim = 1, one_hot = False):
         super(CategoricalAccuracy, self).__init__()
         self.dim = dim
+        self.one_hot = one_hot
+
 
     def forward(self, out, target):
-        return torch.mean((torch.max(out, dim = self.dim)[1] == target).float())
+        t = target if not self.one_hot else torch.argmax(target, dim = 1)
+        return torch.mean((torch.argmax(out, dim = self.dim) == t).float())
+
+
+
+class NLLLoss(nn.NLLLoss):
+    """
+    Identical to PyTorch's NLLLoss but can handle one hot format
+
+    Parameters
+    ----------
+    one_hot: Bool
+        Whether the data is in one hot format or not
+    """
+    def __init__(self, one_hot = False, **kwargs):
+        super(NLLLoss, self).__init__(**kwargs)
+        self.one_hot = one_hot
+
+    def forward(self, out, target):
+        t = target if not self.one_hot else torch.argmax(target, dim = 1)
+        return super(NLLLoss, self).forward(out, t)
 
 
 

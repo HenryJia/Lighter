@@ -68,7 +68,7 @@ def load_wav(filename, desired_sample_rate = None):
     file_sample_rate, audio = channels
     audio = ensure_mono(audio)
     if desired_sample_rate:
-        audio = ensure_sample_rate(desired_sample_rate, file_sample_rate, audio)
+        audio = ensure_sample_rate(desired_sample_rate, file_sample_rate, audio).astype(audio.dtype)
     audio = wav_to_float(audio)
     return audio[:, None] # Expand to (timesteps, 1)
 
@@ -123,6 +123,10 @@ class CSTRDataset(Dataset):
             audio = self.audio_transforms(audio)
 
         if self.joint_transforms:
-            text, audio = joint_transforms((text, audio))
+            x, y = self.joint_transforms((text, audio))
 
-        return text, audio
+        return x, y
+
+
+    def __len__(self):
+        return len(self.text_list)

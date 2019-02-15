@@ -13,13 +13,24 @@ class Flatten(nn.Module):
 
 
 class Reshape(nn.Module):
-    def __init__(self, shape):
+    def __init__(self, *shape):
         super(Reshape, self).__init__()
         self.shape = shape
 
 
     def forward(self, x):
-        return x.view(x.size()[0], *self.shape)
+        return x.view(*self.shape)
+
+
+
+class Permute(nn.Module):
+    def __init__(self, *order):
+        super(Permute, self).__init__()
+        self.order = order
+
+
+    def forward(self, x):
+        return x.permute(*self.order)
 
 
 

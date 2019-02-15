@@ -153,14 +153,45 @@ class Normalize(Transform):
 
 
 
-class FixedLengthPad1D(Transform):
+class Int2OneHot(Transform):
+    """
+    Converts integer classes to one hot format
+
+    Parameters
+    ----------
+    num_classes: Integer
+        Number of classes
+    """
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+
+
+    def __call__(self, x):
+        output = np.zeros((np.prod(x.shape), self.num_classes), dtype = np.uint8)
+        output[np.arange(np.prod(x.shape)), x.flatten()] = 1
+        if x.shape[-1] == 1:
+            shape = x.shape[:-1]
+        else:
+            shape = x.shape
+        return output.reshape(shape + (self.num_classes,))
+
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        format_string += 'num_classes={0}, '.format(self.num_classes)
+        format_string += ')'
+        return format_string
+
+
+
+class FixLength1D(Transform):
     """
     Transform for padding a sequences a fixed length
 
     Parameters
     ----------
-    text_dir: String
-        Directory of the text files we want to do this on
+    length: Integer
+        Length to pad everything to
     left: Bool
         Whether to pad on the left or the right side
     """
@@ -170,15 +201,18 @@ class FixedLengthPad1D(Transform):
 
 
     def __call__(self, x): # We expect inputs in the format of (timesteps, dims)
-        if x.shape[0] > self.length:
-            raise ValueError('Input cannot have bigger dimension 0 than our set length!')
+        if x.shape[0] > self.length: # If we exceed the length, then crop it
+            if self.left:
+                return x[-self.length:]
+            else:
+                return x[:self.length]
         elif x.shape[0] == self.length: # Nothing to do here, we're already at the right length
             return x
         else:
             if self.left:
-                return np.append(np.zeros((self.length - x.shape[0], x.shape[1])), x, axis = 0)
+                return np.append(np.zeros((self.length - x.shape[0], x.shape[1]), dtype = x.dtype), x, axis = 0)
             else:
-                return np.append(x, np.zeros((self.length - x.shape[0], x.shape[1])), axis = 0)
+                return np.append(x, np.zeros((self.length - x.shape[0], x.shape[1]), dtype = x.dtype), axis = 0)
 
 
     def __repr__(self):

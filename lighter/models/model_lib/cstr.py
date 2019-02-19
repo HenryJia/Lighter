@@ -132,27 +132,36 @@ class WaveNetBlock(nn.Module):
         Number of output channels
     skip_channels: Integer
         Number of channels for skip connection output
+        If none, then no skip output will be used
     dilation: Integer
         Dilation of the dilated causal convolution
     """
-    def __init__(self, in_channels, out_channels, skip_channels, dilation = 1):
+    def __init__(self, in_channels, out_channels, skip_channels = None, dilation = 1):
         super(WaveNetBlock, self).__init__()
 
         self.filter_conv = nn.Conv1d(in_channels, in_channels, kernel_size = 2, stride = 1, dilation = dilation, padding = 0, bias = True)
         self.gate_conv = nn.Conv1d(in_channels, in_channels, kernel_size = 2, stride = 1, dilation = dilation, padding = 0, bias = True)
         self.res_conv = nn.Conv1d(in_channels, out_channels, kernel_size = 1)
+        if skip_channels:
+            self.skip_channels = skip_channels
+            self.skip_conv = nn.Conv1d(in_channels, skip_channels, kernel_size = 1)
 
 
     def forward(self, x, h = None): # x is our input, h is our extra conditional variable
         if h is not None:
-            output = x + h
+            inp = x + h
         else:
-            output = x
+            inp = x
 
-        output = torch.tanh(self.filter_conv(output)) * torch.sigmoid(self.gate_conv(output))
+        gated = torch.tanh(self.filter_conv(inp)) * torch.sigmoid(self.gate_conv(inp))
 
-        output = self.res_conv(output) + x[:, :, -output.shape[2]:]
-        return output
+        output = self.res_conv(gated) + x[:, :, -gated.shape[2]:]
+
+        if self.skip_channels:
+            skip = self.skip_conv(gated)
+            return output, skip
+        else:
+            return output
 
 
 
@@ -165,7 +174,9 @@ class CSTRCharacterModel(nn.Module):
         super(CSTRCharacterModel, self).__init__()
 
         # Convolutional Encoder Section
-        self.enc_conv = nn.Sequential(nn.Conv1d(256, 128, kernel_size = 5, stride = 2, padding = 2),
+        self.enc_conv = nn.Sequential(nn.Embedding(num_embeddings = 256, embedding_dim = 128),
+                                      Permute((0, 2, 1)),
+                                      nn.Conv1d(128, 128, kernel_size = 5, stride = 2, padding = 2),
                                       nn.LeakyReLU(),
                                       nn.Conv1d(128, 64, kernel_size = 5, stride = 2, padding = 2),
                                       nn.LeakyReLU(),
@@ -181,18 +192,21 @@ class CSTRCharacterModel(nn.Module):
                                      FeedForwardBlock(d_in = 64, d_hid = 128)])
 
         # For reducing initial dimensionality since we have 1 hot with 256 categories initially
-        self.dec_conv = nn.Conv1d(256, 64, kernel_size = 1)
+        self.dec_conv = nn.Sequential(nn.Embedding(num_embeddings = 256, embedding_dim = 64),
+                                      Permute((0, 2, 1)),
+                                      nn.Conv1d(64, 64, kernel_size = 1))
 
         self.wavenet_blocks = nn.ModuleList()
-        self.dec_attn = MultiHeadAttention(n_head = 4, d_model = 64, d_k = 16, d_v = 16)
+        self.dec_attn = nn.ModuleList()
         for i in range(4):
+            self.dec_attn.append(MultiHeadAttention(n_head = 4, d_model = 64, d_k = 16, d_v = 16))
             self.wavenet_blocks.append(WaveNetBlock(in_channels = 64, out_channels = 64, skip_channels = 64, dilation = 2**i))
 
-        self.dec_out = nn.Sequential(nn.Conv1d(64, 256, kernel_size = 1),
+        self.dec_out = nn.Sequential(nn.Conv1d(128, 256, kernel_size = 1),
                                      nn.LogSoftmax(dim = 1))
 
 
-    def forward(self, x, y):
+    def forward(self, x, y, return_seq = True):
         # Note: We expect x and y in the format of (num_batches, dims, time_steps)
 
         # Run the convolutional part of the encoder
@@ -208,17 +222,26 @@ class CSTRCharacterModel(nn.Module):
             enc_output = F.layer_norm(ff(enc_output) + enc_output, enc_output.shape[-1:])
 
         # Now prepare to apply decoder
-        pad = torch.zeros(y.shape[0], y.shape[1], 2**4 - 1).to(y.device)
-        output = torch.cat([pad, y.float()], dim = 2)
-        output = self.dec_conv(output) # Reduce dimensionality
+        pad = torch.zeros(y.shape[0], 2**4 - 1).to(y.device)
+        output = torch.cat([pad.long(), y.long()], dim = 1)
 
-        # Doing this all in 1 go requires way too much memory, so we'll do it batchwise, which we can
-        h = self.dec_attn(q = output.permute(0, 2, 1).contiguous(), k = enc_output, v = enc_output)[0].permute(0, 2, 1).contiguous()
+        if not return_seq:
+            output = output[..., -2**4 - 1:]
 
-        output = self.wavenet_blocks[0](output, h)
-        for wn in self.wavenet_blocks[1:]:
-            output = wn(output)
+        output = self.dec_conv(output)
 
-        output = self.dec_out(output)
+        skip = output
+
+        for wn, attn in zip(self.wavenet_blocks, self.dec_attn):
+            q = F.avg_pool1d(output, 4).permute(0, 2, 1).contiguous() # Reduce dimensionality for our expensive attention layer
+            h = attn(q = q, k = enc_output, v = enc_output)[0].permute(0, 2, 1).contiguous()
+            h = F.interpolate(h, scale_factor = 4) # Bring dimensionality back up for the rest of the network
+            if h.shape[2] < output.shape[2]:
+                h = torch.cat([h, h[..., h.shape[2] - output.shape[2]:]], dim = 2)
+
+            output, s = wn(output, h)
+            skip = skip[..., -s.shape[2]:] + s
+
+        output = self.dec_out(torch.cat([output, skip], dim = 1))
 
         return output

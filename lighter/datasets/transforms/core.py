@@ -194,10 +194,17 @@ class FixLength1D(Transform):
         Length to pad everything to
     left: Bool
         Whether to pad on the left or the right side
+    pad: Integer
+        Value to pad with
+    stop: Integer
+        Stop code to use, if None then no stop code will be used
+        Only applicable when padding on the right side
     """
-    def __init__(self, length, left = False):
+    def __init__(self, length, left = False, pad = 0, stop = 1):
         self.length = length
         self.left = left
+        self.pad = pad
+        self.stop = stop
 
 
     def __call__(self, x): # We expect inputs in the format of (timesteps, dims)
@@ -209,10 +216,17 @@ class FixLength1D(Transform):
         elif x.shape[0] == self.length: # Nothing to do here, we're already at the right length
             return x
         else:
+            shape = list(x.shape) # get the shape
+            l = shape[0] # Save this in case we need to add in the stop code at l
+            shape[0] = self.length - x.shape[0] # Overwrite the length to the length we want to pad, but keep everything else
             if self.left:
-                return np.append(np.zeros((self.length - x.shape[0], x.shape[1]), dtype = x.dtype), x, axis = 0)
+                out = np.append(np.zeros(shape, dtype = x.dtype) + self.pad, x, axis = 0)
+                return out
             else:
-                return np.append(x, np.zeros((self.length - x.shape[0], x.shape[1]), dtype = x.dtype), axis = 0)
+                out = np.append(x, np.zeros(shape, dtype = x.dtype) + self.pad, axis = 0)
+                if self.stop is not None:
+                    out[l] = self.stop
+                return out
 
 
     def __repr__(self):

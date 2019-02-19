@@ -86,10 +86,26 @@ class Word2Vec(Transform):
 
 
 class Char2Vec(Transform):
-    def __call__(self, x):
-        out = np.zeros((len(x), 256), dtype = np.float32) # Fix dimensionality to 256 for 8bit ASCII
+    """
+    Simple transform to convert ASCII characters to integers or one hot
 
-        for i, c in enumerate(x):
-            out[i, ord(c)] = 1 # Convert to 1 hot
+    Parameters
+    ----------
+    one_hot: Boolean
+        Whether to output the data in one hot format
+    """
+    def __init__(self, one_hot = False):
+        self.one_hot = one_hot
+
+
+    def __call__(self, x):
+        if self.one_hot:
+            out = np.zeros((len(x), 256), dtype = np.long) # Fix dimensionality to 256 for 8bit ASCII
+            for i, c in enumerate(x):
+                out[i, ord(c)] = 1 # Convert to 1 hot
+        else:
+            out = np.zeros((len(x),), dtype = np.long)
+            for i, c in enumerate(x):
+                out[i] = ord(c)
 
         return out

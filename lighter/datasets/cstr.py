@@ -70,7 +70,7 @@ def load_wav(filename, desired_sample_rate = None):
     if desired_sample_rate:
         audio = ensure_sample_rate(desired_sample_rate, file_sample_rate, audio).astype(audio.dtype)
     audio = wav_to_float(audio)
-    return audio[:, None] # Expand to (timesteps, 1)
+    return audio
 
 
 

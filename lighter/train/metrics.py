@@ -143,16 +143,20 @@ class CategoricalAccuracy(nn.Module):
         The dimension to calculate the accuracy across
     one_hot: Bool
         Whether the data is in one hot format or not
+    ignore_index: Integer
+        Index value to ignore
     """
-    def __init__(self, dim = 1, one_hot = False):
+    def __init__(self, dim = 1, one_hot = False, ignore_index = -100):
         super(CategoricalAccuracy, self).__init__()
         self.dim = dim
         self.one_hot = one_hot
+        self.ignore_index = ignore_index
 
 
     def forward(self, out, target):
         t = target if not self.one_hot else torch.argmax(target, dim = 1)
-        return torch.mean((torch.argmax(out, dim = self.dim) == t).float())
+        mask =  1 - (t == self.ignore_index).float()
+        return torch.sum((torch.argmax(out, dim = self.dim) == t).float() * mask) / torch.sum(mask)
 
 
 

@@ -243,13 +243,13 @@ class CSTREncoderModel(nn.Module):
 
 
 
-class CSTRDecoderModel(nn.Module):
+class CSTRWaveNetDecoderModel(nn.Module):
     """
     Decoder half of the CSTR model
 
     """
     def __init__(self, depth = 4):
-        super(CSTRDecoderModel, self).__init__()
+        super(CSTRWaveNetDecoderModel, self).__init__()
 
         self.depth = depth
 
@@ -310,10 +310,10 @@ class CSTRWaveNetModel(nn.Module):
 
     """
     def __init__(self, depth = 6):
-        super(CSTRCharacterModel, self).__init__()
+        super(CSTRWaveNetModel, self).__init__()
 
         self.encoder = CSTREncoderModel()
-        self.decoder = CSTRDecoderModel()
+        self.decoder = CSTRWaveNetDecoderModel()
 
 
     def forward(self, x, speaker, y, h0 = None, return_state = False):

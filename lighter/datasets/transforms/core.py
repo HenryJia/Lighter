@@ -200,7 +200,7 @@ class FixLength1D(Transform):
         Stop code to use, if None then no stop code will be used
         Only applicable when padding on the right side
     """
-    def __init__(self, length, left = False, pad = 0, stop = 1):
+    def __init__(self, length, left = False, pad = 0, stop = None):
         self.length = length
         self.left = left
         self.pad = pad

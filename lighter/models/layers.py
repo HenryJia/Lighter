@@ -30,7 +30,7 @@ class Permute(nn.Module):
 
 
     def forward(self, x):
-        return x.permute(*self.order)
+        return x.permute(*self.order).contiguous()
 
 
 

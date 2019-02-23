@@ -111,10 +111,13 @@ class CSTRDataset(Dataset):
         # Sort them both so they should now match each other
         self.text_list = sorted([s for s in list(Path(text_dir).rglob("*.txt"))])
         self.audio_list = sorted([s for s in list(Path(audio_dir).rglob("*.wav"))])
+        self.speaker_dict = set([os.path.basename(os.path.dirname(t)) for t in self.text_list])
+        self.speaker_dict = dict([(s, i) for i, s in enumerate(self.speaker_dict)])
 
 
     def __getitem__(self, idx):
         text = Path(self.text_list[idx]).read_text()
+        speaker = self.speaker_dict[os.path.basename(os.path.dirname(self.text_list[idx]))]
         if self.text_transforms:
             text = self.text_transforms(text)
 
@@ -123,7 +126,9 @@ class CSTRDataset(Dataset):
             audio = self.audio_transforms(audio)
 
         if self.joint_transforms:
-            x, y = self.joint_transforms((text, audio))
+            x, y = self.joint_transforms(((text, speaker), audio))
+        else:
+            x, y = (text, speaker), audio
 
         return x, y
 

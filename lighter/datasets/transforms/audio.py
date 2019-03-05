@@ -70,6 +70,6 @@ class ExpandULaw(Transform):
 
     def __call__(self, x):
         out = x.astype(np.float32) # Cast back to uint8 and rescale to (-1, 1)
-        out /= (np.iinfo('uint8').max / 2)
-        out -= 1.0
+        out /= (np.iinfo('uint8').max / 2) # This takes it to (0, 2)
+        out -= 1.0 # (This takes it to (-1, 1)
         return np.sign(out) * ((1 + self.u) ** np.abs(out) - 1) / self.u

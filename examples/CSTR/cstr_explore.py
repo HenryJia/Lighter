@@ -41,7 +41,7 @@ args = parser.parse_args()
 # Note, we could use torch.utils.rnn.pack_sequence instead of padding everything to a fixed length, but this is codewise easier for now
 text_transforms = Compose([Char2Vec(), FixLength1D(256, pad = 0), Numpy2Tensor()])
 audio_transforms = Compose([QuantiseULaw(u = 255), Normalize(1, 1), Lambda(lambda x: x.astype(np.long)), FixLength1D(4 * 16000, pad = -1, stop = 0), Numpy2Tensor()])
-joint_transforms = Lambda(lambda x: [(x[0][0], x[0][1], x[1][:-1].clamp(0, 256)), x[1]])
+#joint_transforms = Lambda(lambda x: [(x[0][0], x[0][1], x[1][:-1].clamp(0, 256)), x[1]])
 
 # Create one dataset for everything and use PyTorch samplers to do the training/validation split
 data_set = CSTRDataset(args.text_dir, args.audio_dir, text_transforms = text_transforms, audio_transforms = audio_transforms, joint_transforms = joint_transforms, sample_rate = 16000)
@@ -60,6 +60,16 @@ if args.half:
 else:
     optim = Adam(model.parameters(), lr = 3e-4, eps = 1e-8)
 
+#[x, y], _ = data_set[1100]
+#x = x[None].cuda()
+#y = y[None].cuda()
+#model(x, y)
+#with torch.autograd.profiler.profile(use_cuda = True) as prof:
+    #model(x, y)
+
+#print(prof.key_averages().table(sort_by = 'cuda_time_total'))
+#exit()
+
 loss = [nn.NLLLoss(ignore_index = -1).cuda()]
 metrics = [(0, CategoricalAccuracy(ignore_index = 0).cuda())]
 
@@ -72,6 +82,32 @@ validation_callback = train_callbacks + [CheckpointCallback(args.model_name, mon
 trainer = Trainer(train_loader, train_step, train_callbacks)
 validator = Trainer(validation_loader, validation_step, validation_callback)
 
+#lengths = []
+#for x, y in tqdm(data_set):
+    #lengths += [y.shape[0]]
+#lengths = np.array(lengths)
+#print(np.mean(lengths) / 16000)
+#print(np.std(lengths) / 16000)
+#print(np.min(lengths) / 16000, np.max(lengths) / 16000)
+#print(np.mean((lengths / 16000 < 4).astype(np.float32)))
+#print(np.mean((lengths / 16000 < 5).astype(np.float32)))
+#print(np.mean((lengths / 16000 < 8).astype(np.float32)))
+#print(np.mean((lengths / 16000 < 10).astype(np.float32)))
+#exit()
+
+#x, y = data_set[1100]
+#print(data_set.audio_list[0])
+#y = y.numpy() - 1
+#print(np.max(y), np.min(y))
+#expand = ExpandULaw()
+#y = expand(y)
+#print(np.max(y), np.min(y))
+#y = (y + 1.0) / 2.0 # rescale to [0.0, 1.0]
+#y = y * (np.iinfo(np.int16).max - np.iinfo(np.int16).min) + np.iinfo(np.int16).min
+#y = y.astype(np.int16)
+#print(np.max(y), np.min(y))
+#scipy.io.wavfile.write('test.wav', 16000, y)
+#exit()
 
 for i in range(args.epochs):
     print('Training Epoch {}'.format(i))

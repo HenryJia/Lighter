@@ -3,6 +3,7 @@ from pathlib import Path
 import random, os
 
 import numpy as np
+import pandas as pd
 import scipy.io.wavfile
 import scipy.signal
 
@@ -15,16 +16,16 @@ from tqdm import tqdm
 
 
 
-class CSTRDataset(Dataset):
+class LJSpeechDataset(Dataset):
     """
-    Dataset class for the CSTR Voice Cloning Toolkit
+    Dataset class for the LJSpeech Dataset
 
     Note this returns (text, audio) not (audio, text) when used
 
     Parameters
     ----------
-    text_dir: String
-        Directory containing the text files
+    csv_dir: String
+        Directory containing of the metadata csv
     audio_dir: String
         Directory containin the audio files
     text_transforms: callable
@@ -38,10 +39,11 @@ class CSTRDataset(Dataset):
         All joint transformations should return a list of NumPy arrays
     """
 
-    def __init__(self, text_dir, audio_dir, text_transforms = None, audio_transforms = None, joint_transforms = None, sample_rate = None):
-        super(CSTRDataset, self).__init__()
-        self.text_dir = text_dir
+    def __init__(self, csv_dir, audio_dir, text_transforms = None, audio_transforms = None, joint_transforms = None, sample_rate = None):
+        super(LJSpeechDataset, self).__init__()
+        self.csv_dir = csv_dir
         self.audio_dir = audio_dir
+        self.data_df = pd.read_csv(csv_dir, sep = '|', header = None, usecols = [0, 2], names = ['wav', 'txt'])
 
         self.text_transforms = text_transforms
         self.audio_transforms = audio_transforms
@@ -49,30 +51,25 @@ class CSTRDataset(Dataset):
 
         self.sample_rate = sample_rate
 
-        # Sort them both so they should now match each other
-        self.text_list = sorted([s for s in list(Path(text_dir).rglob("*.txt"))])
-        self.audio_list = sorted([s for s in list(Path(audio_dir).rglob("*.wav"))])
-        self.speaker_dict = set([os.path.basename(os.path.dirname(t)) for t in self.text_list])
-        self.speaker_dict = dict([(s, i) for i, s in enumerate(self.speaker_dict)])
-
 
     def __getitem__(self, idx):
-        text = Path(self.text_list[idx]).read_text()
-        speaker = self.speaker_dict[os.path.basename(os.path.dirname(self.text_list[idx]))]
+        text = self.data_df.iloc[idx]['txt']
+
         if self.text_transforms:
             text = self.text_transforms(text)
 
-        audio = load_wav(self.audio_list[idx], desired_sample_rate = self.sample_rate)
+        fn = os.path.join(self.audio_dir, self.data_df.iloc[idx]['wav'] + '.wav')
+        audio = load_wav(fn, desired_sample_rate = self.sample_rate)
         if self.audio_transforms:
             audio = self.audio_transforms(audio)
 
         if self.joint_transforms:
-            x, y = self.joint_transforms(((text, speaker), audio))
+            x, y = self.joint_transforms((text, audio))
         else:
-            x, y = (text, speaker), audio
+            x, y = text, audio
 
         return x, y
 
 
     def __len__(self):
-        return len(self.text_list)
+        return len(self.data_df)

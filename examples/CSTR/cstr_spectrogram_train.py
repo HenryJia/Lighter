@@ -3,10 +3,11 @@ import numpy as np
 import pandas as pd
 import scipy
 np.random.seed(94103)
+from librosa.feature import melspectrogram
 
 import torch
-torch.backends.cudnn.benchmark = True
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import Adam
 from torchvision.transforms import Compose, Lambda
 from torch.utils.data import SubsetRandomSampler
@@ -17,13 +18,13 @@ torch.backends.cudnn.deterministic = True
 torch.manual_seed(94103)
 
 from lighter.datasets.cstr import CSTRDataset
-from lighter.datasets.transforms import Numpy2Tensor, Char2Vec, FixLength1D, Permute, QuantiseULaw, ExpandULaw, Normalize
+from lighter.datasets.transforms import Numpy2Tensor, Char2Vec, FixLength1D, Permute, QuantiseULaw, ExpandULaw, Normalize, SampleSequence1D
 
 from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy
 
-from lighter.models.model_lib.cstr import CSTRWaveNetModel
+from lighter.models.model_lib.cstr import CSTRMelModel
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--text_dir', required = True, type = str, help = 'Directory of training text dir')
@@ -34,17 +35,36 @@ parser.add_argument('--model_name', required = True, type = str, help = 'Output 
 parser.add_argument('--train_split', required = False, type = float, help = 'Proportion of the data used to train', default = 0.9)
 parser.add_argument('--use_amp', required = False, action = 'store_true', help = 'Whether to use NVidia automatic mixed precision.')
 parser.add_argument('--half', required = False, action = 'store_true', help = 'Whether to use half precision')
-parser.add_argument('--device', required = False, type = str, default = 'cuda:0', help = 'Which CUDA device to use')
+parser.add_argument('--device', default = 'cuda:0', type = str, help = 'Which CUDA device to use')
+parser.add_argument('--depth', default = 10, type = int, help = 'Which CUDA device to use')
+parser.add_argument('--stacks', default = 2, type = int, help = 'Which CUDA device to use')
 
 args = parser.parse_args()
 
+model = CSTRMelModel(wavenet_depth = args.depth, stacks = args.stacks).to(torch.device(args.device))
+
 # Note, we could use torch.utils.rnn.pack_sequence instead of padding everything to a fixed length, but this is codewise easier for now
-text_transforms = Compose([Char2Vec(), FixLength1D(256, pad = 0), Numpy2Tensor()])
-audio_transforms = Compose([QuantiseULaw(u = 255), Normalize(1, 1), Lambda(lambda x: x.astype(np.long)), FixLength1D(4 * 16000, pad = -1, stop = 0), Numpy2Tensor()])
-joint_transforms = Lambda(lambda x: [(x[0][0], x[0][1], x[1][:-1].clamp(0, 256)), x[1]])
+mel_transform = Lambda(lambda x: melspectrogram(x, sr = 16000, n_mels = 256, n_fft = 2048, hop_length = 128).astype(np.float32))
+x_transforms = Compose([mel_transform, Numpy2Tensor()])
+y_transforms = Compose([QuantiseULaw(u = 255), Lambda(lambda x: x.astype(np.long)), Numpy2Tensor()])
+
+seq_sampler = SampleSequence1D(length = model.wavenet.get_receptive_field() + 4096, dim = 0)
+
+def joint_transform_f(x):
+    #if x[1].shape[0] < 2 ** 9 * 8:
+        #np.append(np.zeros((2 ** 9 * 8 - x[1].shape[0],)), x[1], dim = 0) # In case we have really short audio
+    x = seq_sampler(x[1])
+    x1 = x_transforms(x)
+    x2 = y_transforms(x)
+    y = x2.clone()
+    y[..., :model.wavenet.get_receptive_field() - 1] = -1
+    x2 = F.pad(x2[..., :-1], (1, 0), mode = 'constant', value = 0)
+    return [x1, x2], y
+
+joint_transforms = Lambda(joint_transform_f)
 
 # Create one dataset for everything and use PyTorch samplers to do the training/validation split
-data_set = CSTRDataset(args.text_dir, args.audio_dir, text_transforms = text_transforms, audio_transforms = audio_transforms, joint_transforms = joint_transforms, sample_rate = 16000)
+data_set = CSTRDataset(args.text_dir, args.audio_dir, text_transforms = None, audio_transforms = None, joint_transforms = joint_transforms, sample_rate = 16000)
 
 perm = np.random.permutation(len(data_set))
 train_sampler = SubsetRandomSampler(perm[:np.round(args.train_split * len(data_set)).astype(int)].tolist())
@@ -52,13 +72,12 @@ validation_sampler = SubsetRandomSampler(perm[np.round(args.train_split * len(da
 train_loader = AsynchronousLoader(data_set, device = torch.device(args.device), batch_size = args.batch_size, shuffle = False, sampler = train_sampler)
 validation_loader = AsynchronousLoader(data_set, device = torch.device(args.device), batch_size = args.batch_size, shuffle = False, sampler = validation_sampler)
 
-model = CSTRWaveNetModel().to(torch.device(args.device))
 
 if args.half:
     model = model.half()
-    optim = Adam(model.parameters(), lr = 3e-4, eps = 1e-4)
+    optim = Adam(model.parameters(), lr = 1e-3, eps = 1e-4)
 else:
-    optim = Adam(model.parameters(), lr = 3e-4, eps = 1e-8)
+    optim = Adam(model.parameters(), lr = 1e-3, eps = 1e-8)
 
 loss = [nn.NLLLoss(ignore_index = -1).cuda()]
 metrics = [(0, CategoricalAccuracy(ignore_index = 0).cuda())]
@@ -78,4 +97,3 @@ for i in range(args.epochs):
     next(trainer)
     print('Validating Epoch {}'.format(i))
     next(validator)
-

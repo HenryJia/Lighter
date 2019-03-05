@@ -41,7 +41,7 @@ class DefaultStep(object):
     use_amp: Boolean
         Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, model, losses, optimizer, metrics, train = True, use_amp = False):
+    def __init__(self, model, losses, optimizer, metrics = [], train = True, use_amp = False):
         self.model = model
         self.losses = losses
         self.optimizer = optimizer
@@ -66,7 +66,6 @@ class DefaultStep(object):
         data = [data] if torch.is_tensor(data) else data
         targets = [targets] if torch.is_tensor(targets) else targets
 
-        self.model.train(self.train) # Set the training mode
         out = self.model(*data)
 
         out = [out] if torch.is_tensor(out) else out

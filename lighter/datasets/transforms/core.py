@@ -199,39 +199,86 @@ class FixLength1D(Transform):
     stop: Integer
         Stop code to use, if None then no stop code will be used
         Only applicable when padding on the right side
+    dim: Integer
+        Time dimension to pad along
     """
-    def __init__(self, length, left = False, pad = 0, stop = None):
+    def __init__(self, length, left = False, pad = 0, stop = None, dim = 0):
         self.length = length
         self.left = left
         self.pad = pad
         self.stop = stop
+        self.dim = dim
 
 
     def __call__(self, x): # We expect inputs in the format of (timesteps, dims)
-        if x.shape[0] > self.length: # If we exceed the length, then crop it
+        s = [slice(None)] * len(x.shape)
+        if x.shape[self.dim] > self.length: # If we exceed the length, then crop it
             if self.left:
-                return x[-self.length:]
+                s[self.dim] = slice(x.shape[self.dim] - self.length, x,shape[self.dim])
+                return x[tuple(s)]
             else:
-                return x[:self.length]
-        elif x.shape[0] == self.length: # Nothing to do here, we're already at the right length
+                s[self.dim] = slice(self.length)
+                return x[tuple(s)]
+        elif x.shape[self.dim] == self.length: # Nothing to do here, we're already at the right length
             return x
         else:
             shape = list(x.shape) # get the shape
-            l = shape[0] # Save this in case we need to add in the stop code at l
-            shape[0] = self.length - x.shape[0] # Overwrite the length to the length we want to pad, but keep everything else
+            l = shape[self.dim] # Save this in case we need to add in the stop code at l
+            shape[self.dim] = self.length - x.shape[self.dim] # Overwrite the length to the length we want to pad, but keep everything else
             if self.left:
-                out = np.append(np.zeros(shape, dtype = x.dtype) + self.pad, x, axis = 0)
-                return out
+                out = np.append(np.zeros(shape, dtype = x.dtype) + self.pad, x, axis = self.dim)
             else:
-                out = np.append(x, np.zeros(shape, dtype = x.dtype) + self.pad, axis = 0)
+                out = np.append(x, np.zeros(shape, dtype = x.dtype) + self.pad, axis = self.dim)
                 if self.stop is not None:
-                    out[l] = self.stop
-                return out
+                    s[self.dim] = l
+                    out[tuple(s)] = self.stop
+            return out
 
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         format_string += 'length={0}'.format(self.length)
+        format_string += 'left={0}'.format(self.left)
+        format_string += 'pad={0}'.format(self.pad)
+        format_string += 'stop={0}'.format(self.stop)
+        format_string += 'dim={0}'.format(self.dim)
+        format_string += ')'
+        return format_string
+
+
+
+class SampleSequence1D(Transform):
+    """
+    Transform for sampling a smaller sequence from a larger sequence
+
+    Parameters
+    ----------
+    length: Integer
+        Length to pad everything to
+    dim: Integer
+        Time dimension to sample along
+    """
+    def __init__(self, length, dim = 0):
+        self.length = length
+        self.dim = dim
+
+
+    def __call__(self, x):
+        shape = x.shape
+        s = [slice(None)] * len(shape)
+        if shape[self.dim] - self.length < 0:
+            print(shape[self.dim], self.length)
+            raise
+        start = np.random.randint(0, shape[self.dim] - self.length)
+        s[self.dim] = slice(start, start + self.length)
+
+        return x[tuple(s)]
+
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        format_string += 'length={0}'.format(self.length)
+        format_string += 'dim={0}'.format(self.dim)
         format_string += ')'
         return format_string
 

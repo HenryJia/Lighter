@@ -64,7 +64,7 @@ class MelModel(nn.Module):
     def __init__(self, n_mels = 80, n_fft = 800, hops = 200, depth = 8, stacks = 2, res_channels = 64, skip_channels = 128, out_channels = 256):
         super(MelModel, self).__init__()
 
-        self.bridge = nn.Sequential(nn.BatchNorm1d(n_mels, affine = False),
+        self.bridge = nn.Sequential(nn.BatchNorm1d(n_mels, affine = True),
                                     nn.ConvTranspose1d(n_mels, n_mels, kernel_size = n_fft, stride = hops),
                                     nn.Conv1d(n_mels, stacks * depth * 2 * res_channels, kernel_size = 1))
         nn.init.xavier_uniform_(self.bridge[1].weight, gain = nn.init.calculate_gain('tanh'))

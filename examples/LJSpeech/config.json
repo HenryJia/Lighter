@@ -1,11 +1,11 @@
 {
-    "depth": 8,
+    "depth": 12,
     "stacks": 2,
     "res_channels": 64,
-    "skip_channels": 256,
+    "skip_channels": 512,
 
     "epochs": 10,
-    "batch_size": 8,
+    "batch_size": 4,
     "model_name": "model.pth",
     "segment_length": 16000,
     "sample_rate": 16000

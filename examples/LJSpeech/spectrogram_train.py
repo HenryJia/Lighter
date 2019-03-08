@@ -83,6 +83,7 @@ joint_transforms = Lambda(joint_transform_f)
 data_set = LJSpeechDataset(args['csv_dir'], args['audio_dir'], text_transforms = None, audio_transforms = None, joint_transforms = joint_transforms, sample_rate = args['sample_rate'])
 
 perm = np.random.permutation(len(data_set))
+np.save('data_permutations.npy', perm)
 train_sampler = SubsetRandomSampler(perm[:np.round(args['train_split'] * len(data_set)).astype(int)].tolist())
 validation_sampler = SubsetRandomSampler(perm[np.round(args['train_split'] * len(data_set)).astype(int):].tolist())
 train_loader = AsynchronousLoader(data_set, device = torch.device(args['device']), batch_size = args['batch_size'], shuffle = False, sampler = train_sampler)
@@ -94,8 +95,12 @@ if args['half']:
 else:
     optim = Adam(model.parameters(), lr = 1e-3, eps = 1e-8)
 
+class SoftmaxRMSESTD(nn.Module): # Compute the RMSE as a fraction of the standard deviation
+    def forward(self, out, target):
+        return torch.sqrt(torch.mean((torch.argmax(out, dim = 1) - target).float() ** 2)) / torch.std(target.float())
+
 loss = [nn.CrossEntropyLoss().cuda()]
-metrics = [(0, CategoricalAccuracy().cuda())]
+metrics = [(0, CategoricalAccuracy().to(device = torch.device(args['device']))), (0, SoftmaxRMSESTD().to(device = torch.device(args['device'])))]
 
 train_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
 validation_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])

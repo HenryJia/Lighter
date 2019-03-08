@@ -41,7 +41,7 @@ class WaveNetBlock(nn.Module):
 
 
     def forward(self, x, h = None): # x is our input, h is our extra conditional variable
-        inp = F.pad(x, (self.kernel_size - 1) * (self.dilation, 0), mode = 'constant', value = 0)
+        inp = F.pad(x, ((self.kernel_size - 1) * self.dilation, 0), mode = 'constant', value = 0)
 
         output = self.dilate_conv(inp)
 

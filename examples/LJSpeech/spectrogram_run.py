@@ -45,6 +45,8 @@ parser.add_argument('--depth', default = 8, type = int, help = 'Depth of a singl
 parser.add_argument('--stacks', default = 2, type = int, help = 'Number of WaveNet stacks to use')
 parser.add_argument('--res_channels', default = 64, type = int, help = 'Number of WaveNet residual channel to use')
 parser.add_argument('--skip_channels', default = 256, type = int, help = 'Number of WaveNet skip channels to use')
+parser.add_argument('--softmax_temperature', default = 0.25, type = int, help = 'Temperature of softmax for generation')
+parser.add_argument('--samples', default = 10, type = int, help = 'Number of samples to generate')
 
 args, unknown_args = parser.parse_known_args()
 
@@ -78,14 +80,18 @@ joint_transforms = Lambda(joint_transform_f)
 # Create one dataset for everything and use PyTorch samplers to do the training/validation split
 data_set = LJSpeechDataset(args['csv_dir'], args['audio_dir'], text_transforms = None, audio_transforms = None, joint_transforms = joint_transforms, sample_rate = args['sample_rate'])
 
-perm = np.random.permutation(len(data_set))
+#perm = np.random.permutation(len(data_set))
+perm = np.load('data_permutations.npy') # Use the same permutations as training so we get the same train and validation sets
 train_sampler = SubsetRandomSampler(perm[:np.round(args['train_split'] * len(data_set)).astype(int)].tolist())
 validation_sampler = SubsetRandomSampler(perm[np.round(args['train_split'] * len(data_set)).astype(int):].tolist())
 train_loader = AsynchronousLoader(data_set, device = torch.device(args['device']), batch_size = 1, shuffle = False, sampler = train_sampler)
 validation_loader = AsynchronousLoader(data_set, device = torch.device(args['device']), batch_size = 1, shuffle = False, sampler = validation_sampler)
 
+if not os.path.exists('./samples'):
+    os.makedirs('./samples')
 
 for i, (x, y) in enumerate(validation_loader):
+    print('Generating sample number {} out of {}'.format(i + 1, args['samples']))
     with torch.no_grad():
         x = x[1]
         out = torch.zeros((1, 1)).to(device = torch.device(args['device']), dtype = torch.long)
@@ -93,14 +99,15 @@ for i, (x, y) in enumerate(validation_loader):
 
         pb = tqdm(total = bridge.shape[2])
 
-        for i in range(bridge.shape[2]):
+        for j in range(bridge.shape[2]):
             if out.shape[1] < model.wavenet.get_receptive_field():
                 inp = out
             else:
                 inp = out[:, -model.wavenet.get_receptive_field():]
 
-            out_probs = model.wavenet(inp, bridge[..., i:i + 1])[:, :, -1]
-            out_probs = torch.exp(out_probs).view(-1)
+            out_probs = model.wavenet(inp, bridge[..., j:j + 1])[:, :, -1]
+            #out_probs = torch.exp(out_probs).view(-1)
+            out_probs = torch.softmax(out_probs / args['softmax_temperature'], dim = 1).view(-1)
 
             out_rv = torch.distributions.Categorical(out_probs)
             out_current = out_rv.sample().view(1, 1)
@@ -117,19 +124,21 @@ for i, (x, y) in enumerate(validation_loader):
 
         pb.close()
         out = out[0].cpu().numpy()
-    break
 
-expand = ExpandULaw(u = 255)
-out = out.astype(np.float32)
-out = expand(out)
-out = (out + 1.0) / 2.0 # rescale to [0.0, 1.0]
-out = out * (np.iinfo(np.int16).max - np.iinfo(np.int16).min) + np.iinfo(np.int16).min
-out = out.astype(np.int16)
-scipy.io.wavfile.write('test.wav', args['sample_rate'], out)
+        expand = ExpandULaw(u = 255)
+        out = out.astype(np.float32)
+        out = expand(out)
+        out = (out + 1.0) / 2.0 # rescale to [0.0, 1.0]
+        out = out * (np.iinfo(np.int16).max - np.iinfo(np.int16).min) + np.iinfo(np.int16).min
+        out = out.astype(np.int16)
+        scipy.io.wavfile.write('./samples/test' + str(i) + '.wav', args['sample_rate'], out)
 
-y_wav = y[0].cpu().numpy().astype(np.float32)
-y_wav = expand(y_wav)
-y_wav = (y_wav + 1.0) / 2.0 # rescale to [0.0, 1.0]
-y_wav = y_wav * (np.iinfo(np.int16).max - np.iinfo(np.int16).min) + np.iinfo(np.int16).min
-y_wav = y_wav.astype(np.int16)
-scipy.io.wavfile.write('test_control.wav', args['sample_rate'], y_wav)
+        y_wav = y[0].cpu().numpy().astype(np.float32)
+        y_wav = expand(y_wav)
+        y_wav = (y_wav + 1.0) / 2.0 # rescale to [0.0, 1.0]
+        y_wav = y_wav * (np.iinfo(np.int16).max - np.iinfo(np.int16).min) + np.iinfo(np.int16).min
+        y_wav = y_wav.astype(np.int16)
+        scipy.io.wavfile.write('./samples/test_groundtruth' + str(i) + '.wav', args['sample_rate'], y_wav)
+
+    if i >= args['samples']:
+        break

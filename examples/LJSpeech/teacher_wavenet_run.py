@@ -45,7 +45,6 @@ parser.add_argument('--depth', default = 8, type = int, help = 'Depth of a singl
 parser.add_argument('--stacks', default = 2, type = int, help = 'Number of WaveNet stacks to use')
 parser.add_argument('--res_channels', default = 64, type = int, help = 'Number of WaveNet residual channel to use')
 parser.add_argument('--skip_channels', default = 256, type = int, help = 'Number of WaveNet skip channels to use')
-parser.add_argument('--softmax_temperature', default = 0.25, type = int, help = 'Temperature of softmax for generation')
 parser.add_argument('--samples', default = 10, type = int, help = 'Number of samples to generate')
 
 args, unknown_args = parser.parse_known_args()
@@ -56,7 +55,11 @@ if args['json'] is not None:
         args_json = json.load(f)
     args = {**args, **args_json}
 
-model = MelModel(n_mels = args['n_mels'], n_fft = args['n_fft'], hops = args['hops'], depth = args['depth'], stacks = args['stacks'], res_channels = args['res_channels'], skip_channels = args['skip_channels']).to(torch.device(args['device']))
+model = MelModel(n_mels = args['n_mels'], n_fft = args['n_fft'], hops = args['hops'],
+                 depth = args['depth'], stacks = args['stacks'],
+                 res_channels = args['res_channels'], skip_channels = args['skip_channels'],
+                 out_channels = 2, embed = False, bias = True)
+model = model.to(torch.device(args['device']))
 model.load_state_dict(torch.load(args['model_name'], map_location = torch.device(args['device'])))
 model.eval()
 
@@ -64,18 +67,18 @@ model.eval()
 mel_transform = Lambda(lambda x: melspectrogram(x, sr = args['sample_rate'], n_mels = args['n_mels'], n_fft = args['n_fft'], hop_length = args['hops']).astype(np.float32))
 log_transform = Lambda(lambda x: np.log(np.clip(x, a_min = 1e-5, a_max = None))) # Compress into Log-scale
 h_transforms = Compose([mel_transform, log_transform, Numpy2Tensor()])
-y_transforms = Compose([QuantiseULaw(u = 255), Lambda(lambda x: x.astype(np.long)), Numpy2Tensor()])
+y_transforms = Compose([Lambda(lambda x: x.astype(np.float32)[None]), Numpy2Tensor()])
 
 def joint_transform_f(x):
     x = x[1]
     h = h_transforms(x)
     x = y_transforms(x)
     y = x.clone()
-    #y[..., :model.wavenet.get_receptive_field() - 1] = -1
     x = F.pad(x[..., :-1], (1, 0), mode = 'constant', value = 0)
     return [x, h], y
 
 joint_transforms = Lambda(joint_transform_f)
+
 
 # Create one dataset for everything and use PyTorch samplers to do the training/validation split
 data_set = LJSpeechDataset(args['csv_dir'], args['audio_dir'], text_transforms = None, audio_transforms = None, joint_transforms = joint_transforms, sample_rate = args['sample_rate'])
@@ -87,58 +90,46 @@ validation_sampler = SubsetRandomSampler(perm[np.round(args['train_split'] * len
 train_loader = AsynchronousLoader(data_set, device = torch.device(args['device']), batch_size = 1, shuffle = False, sampler = train_sampler)
 validation_loader = AsynchronousLoader(data_set, device = torch.device(args['device']), batch_size = 1, shuffle = False, sampler = validation_sampler)
 
-if not os.path.exists('./samples'):
-    os.makedirs('./samples')
+if not os.path.exists('./samples/teacher'):
+    os.makedirs('./samples/teacher')
 
 for i, (x, y) in enumerate(validation_loader):
-    if i >= args['samples']:
-        break
-
     print('Generating sample number {} out of {}'.format(i + 1, args['samples']))
     with torch.no_grad():
         x = x[1]
-        out = torch.zeros((1, 1)).to(device = torch.device(args['device']), dtype = torch.long)
+        out = torch.zeros((1, 1, 1)).to(device = torch.device(args['device']), dtype = torch.float32)
         bridge = model.bridge(x)
 
         pb = tqdm(total = bridge.shape[2])
 
         for j in range(bridge.shape[2]):
-            if out.shape[1] < model.wavenet.get_receptive_field():
+            if out.shape[2] < model.wavenet.get_receptive_field():
                 inp = out
             else:
-                inp = out[:, -model.wavenet.get_receptive_field():]
+                inp = out[:, :, -model.wavenet.get_receptive_field():]
 
-            out_probs = model.wavenet(inp, bridge[..., max(j + 1 - model.wavenet.get_receptive_field(), 0):j + 1])[:, :, -1]
-            #out_probs = torch.exp(out_probs).view(-1)
-            out_probs = torch.softmax(out_probs / args['softmax_temperature'], dim = 1).view(-1)
+            out_rv = model.wavenet(inp, bridge[..., max(j + 1 - model.wavenet.get_receptive_field(), 0):j + 1])[:, :, -1:]
+            mu, sigma = torch.chunk(out_rv, 2, dim = 1)
+            out_rv = torch.distributions.Normal(mu, torch.exp(sigma))
+            out_current = torch.clamp(out_rv.sample().view(1, 1, 1), min = -1, max = 1)
 
-            out_rv = torch.distributions.Categorical(out_probs)
-            out_current = out_rv.sample().view(1, 1)
-
-            out_max = torch.argmax(out_probs).view((1, 1))
-
-            pb.set_postfix(current = out_current.item(), out_max = out_max.item())
+            pb.set_postfix(current = out_current.item(), mu = mu.item(), sigma = torch.exp(sigma).item())
             pb.update(1)
 
-            if out is not None:
-                out = torch.cat([out, out_current], dim = 1)
-            else:
-                out = out_current
+            out = torch.cat([out, out_current], dim = 2)
 
         pb.close()
-        out = out[0].cpu().numpy()
-
-        expand = ExpandULaw(u = 255)
-        out = out.astype(np.float32)
-        out = expand(out)
+        out = out[0, 0].cpu().numpy().astype(np.float32)
         out = (out + 1.0) / 2.0 # rescale to [0.0, 1.0]
         out = out * (np.iinfo(np.int16).max - np.iinfo(np.int16).min) + np.iinfo(np.int16).min
         out = out.astype(np.int16)
-        scipy.io.wavfile.write('./samples/test' + str(i) + '.wav', args['sample_rate'], out)
+        scipy.io.wavfile.write('./samples/teacher/test' + str(i) + '.wav', args['sample_rate'], out)
 
-        y_wav = y[0].cpu().numpy().astype(np.float32)
-        y_wav = expand(y_wav)
+        y_wav = y[0, 0].cpu().numpy().astype(np.float32)
         y_wav = (y_wav + 1.0) / 2.0 # rescale to [0.0, 1.0]
         y_wav = y_wav * (np.iinfo(np.int16).max - np.iinfo(np.int16).min) + np.iinfo(np.int16).min
         y_wav = y_wav.astype(np.int16)
-        scipy.io.wavfile.write('./samples/test_groundtruth' + str(i) + '.wav', args['sample_rate'], y_wav)
+        scipy.io.wavfile.write('./samples/teacher/test_groundtruth' + str(i) + '.wav', args['sample_rate'], y_wav)
+
+    if i >= args['samples']:
+        break

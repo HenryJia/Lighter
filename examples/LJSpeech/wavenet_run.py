@@ -71,7 +71,7 @@ def joint_transform_f(x):
     h = h_transforms(x)
     x = y_transforms(x)
     y = x.clone()
-    #y[..., :model.wavenet.get_receptive_field() - 1] = -1
+    # Shift by 1 so our targets are the predictions
     x = F.pad(x[..., :-1], (1, 0), mode = 'constant', value = 0)
     return [x, h], y
 

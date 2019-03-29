@@ -1,16 +1,9 @@
 from time import time
-from pathlib import Path
-import random, os, warnings
+import warnings
 
 import numpy as np
 import scipy.io.wavfile
 import scipy.signal
-
-import torch
-from torch.utils.data import Dataset
-
-from tqdm import tqdm
-
 
 def ensure_sample_rate(desired_sample_rate, file_sample_rate, mono_audio):
     """
@@ -23,6 +16,9 @@ def ensure_sample_rate(desired_sample_rate, file_sample_rate, mono_audio):
 
 
 def wav_to_float(x):
+    """
+    The wav file will be in int16 format, we want it as floats. We'll also rescale it to [-1, +1]
+    """
     try:
         max_value = np.iinfo(x.dtype).max
         min_value = np.iinfo(x.dtype).min

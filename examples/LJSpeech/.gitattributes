@@ -1,0 +1,2 @@
+model.pth filter=lfs diff=lfs merge=lfs -text
+data_permutations.npy filter=lfs diff=lfs merge=lfs -text

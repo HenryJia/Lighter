@@ -27,10 +27,13 @@ class RSNADataset(Dataset):
     x_transforms: List
         A list of tuples containing the keyword of the feature to extract from the DICOM file and the corresponding transformation to apply
         All transformations should return a NumPy array
-    y_transforms:
+    y_transforms: Callable
         A function or callable transfrom to apply to the targets specified by the label dataframe entries
         The input to this function will be the raw dataframe rows corresponding to the selected entry
-        All  transformations should return a NumPy array
+        All transformations should return a NumPy array
+    joint_transforms: Callable
+        transforms to apply to both the data and the targets simultaneously
+        All joint transformations should return a list of NumPy arrays
     """
 
     def __init__(self, data_df, data_dir, x_transforms, y_transforms, joint_transforms = None):

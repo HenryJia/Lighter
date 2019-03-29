@@ -31,7 +31,7 @@ class AsynchronousLoader(object):
     queue_size: Integer
         Size of the que used to store the data loaded to the device
     """
-    def __init__(self, dataset, device, batch_size = 1, shuffle = False, pin_memory = True, workers = 10, queue_size = 10):
+    def __init__(self, dataset, device, batch_size = 1, shuffle = False, pin_memory = True, workers = 10, queue_size = 10, **kwargs):
         self.dataset = dataset
         self.device = device
         self.batch_size = batch_size
@@ -41,7 +41,7 @@ class AsynchronousLoader(object):
         self.queue_size = queue_size
 
         # Use PyTorch's DataLoader for collating samples and stuff since it's nicely written and parallelrised
-        self.dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = shuffle, pin_memory = pin_memory, num_workers = workers)
+        self.dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = shuffle, pin_memory = pin_memory, num_workers = workers, **kwargs)
 
         self.idx = 0
 

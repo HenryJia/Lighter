@@ -16,7 +16,7 @@ from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--root_dir', type = str, help = 'Root directory containing the folder with the DICOM files and the csv files')
+parser.add_argument('--root_dir', type = str, help = 'Root directory containing the folder with the MNIST dataset')
 
 args = parser.parse_args()
 

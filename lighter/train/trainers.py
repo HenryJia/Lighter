@@ -1,3 +1,6 @@
+from threading import Thread
+from queue import Queue
+
 import torch
 from torch import Tensor
 import torch.nn as nn
@@ -26,19 +29,40 @@ class Trainer(object):
     callbacks: list of callables
         callbacks should be a list of callable classes which handle statistics tracking and outputs of training/evaluation/prediction
         callbacks should take the output from step, the instance of the Trainer which has it and the batch number as a member as arguments
+    queue_size: Integer
+        Size of the queue for the outputs to feed to callbacks
+        Set to 0 for infinite length queue
+        Infinite queue would mean that training is never slowed by callbacks
+        But it would eat up more memory as increasing number of outputs are stored
     """
-    def __init__(self, loader, step, callbacks):
+    def __init__(self, loader, step, callbacks, queue_size = 10):
         self.loader = loader
         self.step = step
         self.callbacks = callbacks
+        self.queue_size = queue_size
+
+
+    def train_loop(self):
+        for i, sample in enumerate(self.loader):
+            self.queue.put_nowait(self.step(sample))
 
 
     def __next__(self):
         for c in self.callbacks:
             c.epoch_begin(self)
-        for i, sample in enumerate(self.loader):
-            out = self.step(sample)
+
+        # Use threading so our training isn't waiting on callbacks
+        self.queue = Queue(maxsize = self.queue_size)
+        self.worker = Thread(target = self.train_loop)
+        self.worker.setDaemon(True)
+        self.worker.start()
+
+        i = 0
+        while (self.worker.is_alive() or not self.queue.empty()) and i < len(self.loader):
+            out = self.queue.get()
             for c in self.callbacks:
                 c(out, self, i)
+            self.queue.task_done()
+            i += 1
         for c in self.callbacks:
             c.epoch_end(self)

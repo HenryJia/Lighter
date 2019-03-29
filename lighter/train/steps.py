@@ -6,6 +6,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
+from apex import amp
+
+
+
 @dataclass(frozen = True)
 class StepReport(object):
     outputs: dict
@@ -34,13 +38,19 @@ class DefaultStep(object):
         We use a list of tuple pairs rather than a dictionary as to allow multiple metrics to be applied to the same output
     train: Boolean
         Whether we are training or evaluating
+    use_amp: Boolean
+        Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, model, losses, optimizer, metrics, train = True):
+    def __init__(self, model, losses, optimizer, metrics = [], train = True, use_amp = False):
         self.model = model
         self.losses = losses
         self.optimizer = optimizer
         self.metrics = metrics
         self.train = train
+        self.use_amp = use_amp
+
+        if use_amp:
+            self.amp_handle = amp.init()
 
 
     def unload_instance(self, sample): # Recursive unloading for each instance based on torch.utils.data.default_collate
@@ -56,10 +66,11 @@ class DefaultStep(object):
         data = [data] if torch.is_tensor(data) else data
         targets = [targets] if torch.is_tensor(targets) else targets
 
-        self.model.train(self.train) # Set the training mode
         out = self.model(*data)
 
         out = [out] if torch.is_tensor(out) else out
+
+        out = [o.float() if o.dtype == torch.float16 else o for o in out]
 
         losses = [('{}_{}'.format(l.__class__.__name__, idx), l(o, t)) for idx, (l, o, t) in enumerate(zip(self.losses, out, targets))]
         total_loss = sum(list(zip(*losses))[1]) # use the zip transposition trick to avoid having to loop manually
@@ -67,7 +78,11 @@ class DefaultStep(object):
 
         if self.train:
             self.optimizer.zero_grad()
-            total_loss.backward()
+            if self.use_amp:
+                with self.amp_handle.scale_loss(total_loss, self.optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                total_loss.backward()
             self.optimizer.step()
 
         with torch.no_grad():

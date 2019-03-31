@@ -59,8 +59,6 @@ if args['json'] is not None:
 model = MelModel(n_mels = args['n_mels'], n_fft = args['n_fft'], hops = args['hops'], depth = args['depth'], stacks = args['stacks'], res_channels = args['res_channels'], skip_channels = args['skip_channels']).to(torch.device(args['device']))
 model.load_state_dict(torch.load(args['model_name'], map_location = torch.device(args['device'])))
 model.eval()
-
-# Note, we could use torch.utils.rnn.pack_sequence instead of padding everything to a fixed length, but this is codewise easier for now
 mel_transform = Lambda(lambda x: melspectrogram(x, sr = args['sample_rate'], n_mels = args['n_mels'], n_fft = args['n_fft'], hop_length = args['hops']).astype(np.float32))
 log_transform = Lambda(lambda x: np.log(np.clip(x, a_min = 1e-5, a_max = None))) # Compress into Log-scale
 h_transforms = Compose([mel_transform, log_transform, Numpy2Tensor()])
@@ -86,6 +84,8 @@ train_sampler = SubsetRandomSampler(perm[:np.round(args['train_split'] * len(dat
 validation_sampler = SubsetRandomSampler(perm[np.round(args['train_split'] * len(data_set)).astype(int):].tolist())
 train_loader = AsynchronousLoader(data_set, device = torch.device(args['device']), batch_size = 1, shuffle = False, sampler = train_sampler)
 validation_loader = AsynchronousLoader(data_set, device = torch.device(args['device']), batch_size = 1, shuffle = False, sampler = validation_sampler)
+# Note, we could use torch.utils.rnn.pack_sequence instead of padding everything to a fixed length, but this is codewise easier for now
+
 
 if not os.path.exists('./samples'):
     os.makedirs('./samples')

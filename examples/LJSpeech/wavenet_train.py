@@ -64,8 +64,6 @@ mel_transform = Lambda(lambda x: melspectrogram(x, sr = args['sample_rate'], n_m
 log_transform = Lambda(lambda x: np.log(np.clip(x, a_min = 1e-5, a_max = None))) # Compress into Log-scale
 h_transforms = Compose([mel_transform, log_transform, Numpy2Tensor()])
 y_transforms = Compose([QuantiseULaw(u = 255), Lambda(lambda x: x.astype(np.long)), Numpy2Tensor()])
-
-#seq_sampler = SampleSequence1D(length = model.wavenet.get_receptive_field() + args['segment_length'], dim = 0)
 seq_sampler = SampleSequence1D(length = args['segment_length'], dim = 0)
 
 def joint_transform_f(x):
@@ -73,7 +71,6 @@ def joint_transform_f(x):
     h = h_transforms(x)
     x = y_transforms(x)
     y = x.clone()
-    #y[..., :model.wavenet.get_receptive_field() - 1] = -1
     x = F.pad(x[..., :-1], (1, 0), mode = 'constant', value = 0)
     return [x, h], y
 

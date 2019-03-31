@@ -1,5 +1,3 @@
-import math
-
 import torch
 from torch import Tensor
 import torch.nn as nn
@@ -7,7 +5,6 @@ import torch.nn.functional as F
 
 from ..utils import Permute
 from ..wavenet import WaveNetBlock
-from ..attention import MultiHeadAttention
 
 
 
@@ -16,7 +13,7 @@ class WaveNetModel(nn.Module):
     WaveNet model for generating audio from Mel Spectrograms
 
     """
-    def __init__(self, depth = 8, stacks = 2, res_channels = 64, skip_channels = 256, out_channels = 256,
+    def __init__(self, depth = 10, stacks = 2, res_channels = 64, skip_channels = 256, out_channels = 256,
                  embed = True, bias = False, mu = None, log_sigma = None):
         super(WaveNetModel, self).__init__()
 
@@ -42,6 +39,7 @@ class WaveNetModel(nn.Module):
                                  nn.Conv1d(out_channels, out_channels, kernel_size = 1, bias = bias))
         nn.init.xavier_uniform_(self.out[1].weight, gain = nn.init.calculate_gain('relu'))
         nn.init.xavier_uniform_(self.out[3].weight, gain = nn.init.calculate_gain('relu'))
+
         if mu is not None or log_sigma is not None:
             with torch.no_grad():
                 self.out[1].bias.zero_()
@@ -49,8 +47,9 @@ class WaveNetModel(nn.Module):
                 self.out[3].bias[:out_channels // 2] = mu
                 self.out[3].bias[out_channels // 2:] = log_sigma
 
+
     def forward(self, x, h):
-        # Note: We expect x and y in the format of (num_batches, dims, time_steps)
+        # Note: We expect x and y in the format of (num_batches, time_steps)
         output = self.embed(x)
 
         h = torch.chunk(h, self.depth * self.stacks, dim = 1)

@@ -49,9 +49,6 @@ class DefaultStep(object):
         self.train = train
         self.use_amp = use_amp
 
-        if use_amp:
-            self.amp_handle = amp.init()
-
 
     def unload_instance(self, sample): # Recursive unloading for each instance based on torch.utils.data.default_collate
         if torch.is_tensor(sample):
@@ -79,7 +76,7 @@ class DefaultStep(object):
         if self.train:
             self.optimizer.zero_grad()
             if self.use_amp:
-                with self.amp_handle.scale_loss(total_loss, self.optimizer) as scaled_loss:
+                with amp.scale_loss(total_loss, self.optimizer) as scaled_loss:
                     scaled_loss.backward()
             else:
                 total_loss.backward()

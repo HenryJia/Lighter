@@ -12,6 +12,9 @@ from torch.optim import Adam
 from torchvision.transforms import Compose, Lambda
 from torch.utils.data import SubsetRandomSampler
 
+import apex
+from apex import amp
+
 from tqdm import tqdm
 
 torch.backends.cudnn.deterministic = True
@@ -89,6 +92,9 @@ validation_loader = AsynchronousLoader(data_set, device = torch.device(args['dev
 if args['half']:
     model = model.half()
     optim = Adam(model.parameters(), lr = 1e-3, eps = 1e-4)
+elif args['use_amp']:
+    optim = Adam(model.parameters(), lr = 1e-3, eps = 1e-8)
+    model, optim = amp.initialize(model, optim, opt_level = 'O2')
 else:
     optim = Adam(model.parameters(), lr = 1e-3, eps = 1e-8)
 

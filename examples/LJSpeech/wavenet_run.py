@@ -24,7 +24,7 @@ from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy
 
-from lighter.models.model_lib.ljspeech import MelModel
+from lighter.models.model_lib.ljspeech import MelWaveNetModel
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--json', type = str, help = 'JSON file to specify arguments and will overwrite any command line arguments')
@@ -56,7 +56,7 @@ if args['json'] is not None:
         args_json = json.load(f)
     args = {**args, **args_json}
 
-model = MelModel(n_mels = args['n_mels'], n_fft = args['n_fft'], hops = args['hops'], depth = args['depth'], stacks = args['stacks'], res_channels = args['res_channels'], skip_channels = args['skip_channels']).to(torch.device(args['device']))
+model = MelWaveNetModel(n_mels = args['n_mels'], n_fft = args['n_fft'], hops = args['hops'], depth = args['depth'], stacks = args['stacks'], res_channels = args['res_channels'], skip_channels = args['skip_channels']).to(torch.device(args['device']))
 model.load_state_dict(torch.load(args['model_name'], map_location = torch.device(args['device'])))
 model.eval()
 mel_transform = Lambda(lambda x: melspectrogram(x, sr = args['sample_rate'], n_mels = args['n_mels'], n_fft = args['n_fft'], hop_length = args['hops']).astype(np.float32))

@@ -63,7 +63,7 @@ class GaussianNLLLoss(nn.Module):
 
     def forward(self, out, target):
         mu, sigma = torch.chunk(out, 2, dim = self.dim)
-        #sigma = torch.clamp(sigma, min = self.min_sigma)
+        sigma = torch.clamp(sigma, min = self.min_sigma)
         if self.is_log:
             log_sigma = sigma
             sigma = torch.exp(sigma)

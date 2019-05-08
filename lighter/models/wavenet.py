@@ -19,22 +19,22 @@ class WaveNetBlock(nn.Module):
     dilation: Integer
         Dilation of the dilated causal convolution
     """
-    def __init__(self, in_channels, skip_channels, return_residual = True, dilation = 1, kernel_size = 2):
+    def __init__(self, in_channels, skip_channels, gate_channels, return_residual = True, dilation = 1, kernel_size = 2):
         super(WaveNetBlock, self).__init__()
         self.dilation = dilation
         self.kernel_size = kernel_size
         self.return_residual = return_residual
 
         # dilated convolutions has twice the channels, one for the sigmoid gate, one for the tanh
-        self.dilate_conv = nn.Conv1d(in_channels, 2 * in_channels, kernel_size = kernel_size, stride = 1, dilation = dilation, padding = 0)
+        self.dilate_conv = nn.Conv1d(in_channels, 2 * gate_channels, kernel_size = kernel_size, stride = 1, dilation = dilation, padding = 0)
         nn.init.xavier_uniform_(self.dilate_conv.weight, gain = nn.init.calculate_gain('tanh'))
 
         if return_residual:
-            self.res_conv = nn.Conv1d(in_channels, in_channels, kernel_size = 1)
+            self.res_conv = nn.Conv1d(gate_channels, in_channels, kernel_size = 1)
             nn.init.xavier_uniform_(self.res_conv.weight, gain = nn.init.calculate_gain('linear'))
 
         self.skip_channels = skip_channels
-        self.skip_conv = nn.Conv1d(in_channels, skip_channels, kernel_size = 1)
+        self.skip_conv = nn.Conv1d(gate_channels, skip_channels, kernel_size = 1)
         nn.init.xavier_uniform_(self.skip_conv.weight, gain = nn.init.calculate_gain('relu'))
 
 

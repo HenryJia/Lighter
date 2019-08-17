@@ -52,6 +52,7 @@ class DefaultStep(object):
 
     def unload_instance(self, sample): # Recursive unloading for each instance based on torch.utils.data.default_collate
         if torch.is_tensor(sample):
+            # TODO: Refactor to remove this, since unloading from GPU cannot be done asynchronously in PyTorch
             return sample.detach().cpu().numpy()
         else:
             return [self.load_instance(s) for s in sample]

@@ -64,5 +64,7 @@ class Trainer(object):
                 c(out, self, i)
             self.queue.task_done()
             i += 1
+        self.queue.join()
+        self.worker.join()
         for c in self.callbacks:
             c.epoch_end(self)

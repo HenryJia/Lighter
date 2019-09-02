@@ -15,8 +15,8 @@ torch.manual_seed(94103)
 from lighter.datasets.rsna import RSNADataset, split_validation, GetBbox
 from lighter.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Binary, Normalize, JointRandomHFlip
 
-from lighter.models.model_lib.rsna import UNet
-from lighter.models.densenet import DenseNet
+from lighter.modules.model_lib.rsna import UNet
+from lighter.modules.densenet import DenseNet
 
 from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback

@@ -9,7 +9,7 @@ from torch.optim import Adam
 from torchvision.transforms import ToTensor
 from torchvision.datasets import MNIST
 
-from lighter.models.layers import Flatten
+from lighter.modules.utils import Flatten
 
 from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback

@@ -27,7 +27,7 @@ from lighter.train import Trainer, AsynchronousLoader, DefaultStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy
 
-from lighter.models.model_lib.ljspeech import MelWaveNetModel
+from lighter.modules.model_lib.wavenet import MelWaveNetModel
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--json', type = str, help = 'JSON file to specify arguments and will overwrite any command line arguments')

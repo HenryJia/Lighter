@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..utils import Permute
-from ..wavenet import WaveNetBlock
+from ..wavenet_block import WaveNetBlock
 
 
 

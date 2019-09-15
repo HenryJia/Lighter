@@ -60,8 +60,6 @@ class RSNADataset(Dataset):
 
         y_df = self.data_df.loc[self.data_df['patientId'] == self.id_list[idx]]
         y = self.y_transforms(y_df)
-        if torch.is_tensor(y):
-            y = [y]
         if self.joint_transforms:
             x, y = self.joint_transforms([x, y])
         return x, y

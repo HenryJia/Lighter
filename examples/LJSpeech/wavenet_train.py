@@ -102,14 +102,14 @@ class SoftmaxRMSESTD(nn.Module): # Compute the RMSE as a fraction of the standar
     def forward(self, out, target):
         return torch.sqrt(torch.mean((torch.argmax(out, dim = 1) - target).float() ** 2)) / torch.std(target.float())
 
-loss = [nn.CrossEntropyLoss().cuda()]
-metrics = [(0, CategoricalAccuracy().to(device = torch.device(args['device']))), (0, SoftmaxRMSESTD().to(device = torch.device(args['device'])))]
+loss = nn.CrossEntropyLoss().cuda()
+metrics = [CategoricalAccuracy().to(device = torch.device(args['device'])), SoftmaxRMSESTD().to(device = torch.device(args['device']))]
 
-train_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
-validation_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
+train_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
+validation_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
 
 train_callbacks = [ProgBarCallback(check_queue = True)]
-validation_callback = train_callbacks + [CheckpointCallback(args['model_name'], monitor = 'CategoricalAccuracy_0', save_best = True, mode = 'max')]
+validation_callback = train_callbacks + [CheckpointCallback(args['model_name'], monitor = 'CategoricalAccuracy', save_best = True, mode = 'max')]
 
 trainer = Trainer(train_loader, train_step, train_callbacks)
 validator = Trainer(validation_loader, validation_step, validation_callback)

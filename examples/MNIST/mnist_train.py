@@ -35,18 +35,18 @@ model = nn.Sequential(nn.Conv2d(1, 16, 3, padding = 1),
                       nn.Linear(512, 10),
                       nn.LogSoftmax(dim = 1)).cuda()
 
-loss = [nn.NLLLoss().cuda()]
+loss = nn.NLLLoss().cuda()
 optim = Adam(model.parameters(), lr = 3e-4)
-metrics = [(0, CategoricalAccuracy().cuda())]
+metrics = [CategoricalAccuracy().cuda()]
 
-train_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
-validation_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, train = False)
+train_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = True)
+validation_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = False)
 
 train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 
 train_callbacks = [ProgBarCallback(check_queue = True)]
-validation_callback = train_callbacks + [CheckpointCallback('mnist.pth', monitor = 'CategoricalAccuracy_0', save_best = True, mode = 'max')]
+validation_callback = train_callbacks + [CheckpointCallback('mnist.pth', monitor = 'CategoricalAccuracy', save_best = True, mode = 'max')]
 
 trainer = Trainer(train_loader, train_step, train_callbacks)
 validator = Trainer(validation_loader, validation_step, validation_callback)

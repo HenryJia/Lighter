@@ -59,18 +59,18 @@ model = nn.Sequential(features,
                       nn.Conv2d(16, 1, kernel_size = 3, padding = 1),
                       nn.Sigmoid()).to(torch.device('cuda:0'))
 
-loss = [CombineLinear([IOULoss().cuda(), nn.BCELoss().cuda()], [1 - 1e-4, 1e-4])]
+loss = CombineLinear([IOULoss().cuda(), nn.BCELoss().cuda()], [1 - 1e-4, 1e-4])
 optim = Adam(model.parameters(), lr = 3e-4)
-metrics = [(0, BinaryAccuracy().cuda()), (0, F1Metric().cuda()), (0, IOUMetric().cuda())]
+metrics = [BinaryAccuracy().cuda(), F1Metric().cuda(), IOUMetric().cuda()]
 
-train_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, train = True)
-validation_step = DefaultStep(model = model, losses = loss, optimizer = optim, metrics = metrics, train = False)
+train_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = True)
+validation_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = False)
 
 train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
 validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
 
 train_callbacks = [ProgBarCallback(check_queue = True)]
-validation_callback = train_callbacks + [CheckpointCallback(args.model_name, monitor = 'IOUMetric_0', save_best = True, mode = 'max')]
+validation_callback = train_callbacks + [CheckpointCallback(args.model_name, monitor = 'IOUMetric', save_best = True, mode = 'max')]
 
 trainer = Trainer(train_loader, train_step, train_callbacks)
 validator = Trainer(validation_loader, validation_step, validation_callback)

@@ -48,6 +48,13 @@ class DefaultStep(object):
         self.use_amp = use_amp
 
 
+    def detach_instance(self, sample): # Recursive detach for each instance based on torch.utils.data.default_collate
+        if torch.is_tensor(sample):
+            return sample.detach()
+        else:
+            return [self.detach_instance(x) for x in sample]
+
+
     def __call__(self, sample):
         data, targets = sample
 
@@ -69,4 +76,4 @@ class DefaultStep(object):
             # Compute the metrics
             metrics = [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
 
-        return StepReport(outputs = {'out': out.detach()}, losses = {'loss': loss.item()}, metrics = dict(metrics))
+        return StepReport(outputs = {'out': self.detach_instance(out)}, losses = {'loss': loss.item()}, metrics = dict(metrics))

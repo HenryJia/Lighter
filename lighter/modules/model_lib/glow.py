@@ -7,31 +7,53 @@ from ..glow_block import GlowBlock
 
 
 class Glow(nn.Module):
-    def __init__(self, in_channel, n_flow, n_block, affine=True, conv_lu=True):
+    """
+    Glow model from GLOW : Generative Flowwith Invertible 1×1 Convolutions paper
+    ArXiv: 1807.03039
+
+    Parameters
+    ----------
+    in_channels: Int
+        Number of channels in the inpuy image
+    n_flows: Int
+        Number of flows per glow block
+    n_blocks: Int
+        Number of glow blocks in our model
+    affine: Bool
+        Whether to use affine coupling or additive couple
+    conv_lu: Bool
+        Whether to use LU decomposed 1x1 convolutions
+    """
+    def __init__(self, in_channels, n_flows, n_blocks, affine=True, conv_lu=True):
         super().__init__()
 
         self.blocks = nn.ModuleList()
-        n_channel = in_channel
-        for i in range(n_block - 1):
-            self.blocks.append(GlowBlock(n_channel, n_flow, affine=affine, conv_lu=conv_lu))
-            n_channel *= 2
-        self.blocks.append(GlowBlock(n_channel, n_flow, split=False, affine=affine))
+        n_channels = in_channels
+        for i in range(n_blocks - 1):
+            self.blocks.append(GlowBlock(n_channels, n_flows, affine=affine, conv_lu=conv_lu))
+            n_channels *= 2
+        self.blocks.append(GlowBlock(n_channels, n_flows, split=False, affine=affine))
+
 
     def forward(self, x):
         log_pz_sum = 0
-        logdet = 0
-        out = x
-        z_outs = []
+        log_det_sum = 0
+        z1 = x
+        z_out = []
 
-        for block in self.blocks:
-            out, det, log_pz, z_new = block(out)
-            z_outs.append(z_new)
-            logdet = logdet + det
+        for i, block in enumerate(self.blocks):
+            if i < len(self.blocks) - 1:
+                z1, z2, log_det, log_pz = block(z1)
+                z_out.append(z2)
+            else:
+                z1, log_det, log_pz = block(z1)
+                z_out.append(z1)
 
-            if log_pz is not None:
-                log_pz_sum = log_pz + log_pz
+            log_det_sum = log_det_sum + log_det
+            log_pz_sum = log_pz_sum + log_pz
 
-        return log_pz_sum, logdet, z_outs
+        return log_pz_sum, log_det_sum, z_out
+
 
     def reverse(self, z_list, reconstruct=False):
         for i, block in enumerate(self.blocks[::-1]):

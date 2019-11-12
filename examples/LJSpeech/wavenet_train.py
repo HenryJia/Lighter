@@ -102,7 +102,7 @@ class SoftmaxRMSESTD(nn.Module): # Compute the RMSE as a fraction of the standar
     def forward(self, out, target):
         return torch.sqrt(torch.mean((torch.argmax(out, dim = 1) - target).float() ** 2)) / torch.std(target.float())
 
-loss = nn.CrossEntropyLoss().cuda()
+loss = nn.CrossEntropyLoss().to(device = torch.device(args['device']))
 metrics = [CategoricalAccuracy().to(device = torch.device(args['device'])), SoftmaxRMSESTD().to(device = torch.device(args['device']))]
 
 train_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])

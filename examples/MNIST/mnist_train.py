@@ -11,7 +11,7 @@ from torchvision.datasets import MNIST
 
 from lighter.modules.utils import Flatten
 
-from lighter.train import Trainer, AsynchronousLoader, DefaultStep
+from lighter.train import SupervisedTrainer, AsynchronousLoader, SupervisedStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
@@ -39,8 +39,8 @@ loss = nn.NLLLoss().cuda()
 optim = Adam(model.parameters(), lr = 3e-4)
 metrics = [CategoricalAccuracy().cuda()]
 
-train_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = True)
-validation_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = False)
+train_step = SupervisedStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = True)
+validation_step = SupervisedStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = False)
 
 train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
 validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 1024, shuffle = True)
@@ -48,8 +48,8 @@ validation_loader = AsynchronousLoader(validation_set, device = torch.device('cu
 train_callbacks = [ProgBarCallback(check_queue = True)]
 validation_callback = train_callbacks + [CheckpointCallback('mnist.pth', monitor = 'CategoricalAccuracy', save_best = True, mode = 'max')]
 
-trainer = Trainer(train_loader, train_step, train_callbacks)
-validator = Trainer(validation_loader, validation_step, validation_callback)
+trainer = SupervisedTrainer(train_loader, train_step, train_callbacks)
+validator = SupervisedTrainer(validation_loader, validation_step, validation_callback)
 
 for i in range(20):
     print('Training Epoch {}'.format(i))

@@ -18,7 +18,7 @@ from lighter.datasets.transforms import Numpy2Tensor, Reshape, Resize, Bbox2Bina
 from lighter.modules.model_lib.rsna import UNet
 from lighter.modules.densenet import DenseNet
 
-from lighter.train import Trainer, AsynchronousLoader, DefaultStep
+from lighter.train import SupervisedTrainer, AsynchronousLoader, SupervisedStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CombineLinear, BinaryAccuracy, IOUMetric, IOULoss, F1Metric, F1Loss
 
@@ -63,8 +63,8 @@ loss = CombineLinear([IOULoss().cuda(), nn.BCELoss().cuda()], [1 - 1e-4, 1e-4])
 optim = Adam(model.parameters(), lr = 3e-4)
 metrics = [BinaryAccuracy().cuda(), F1Metric().cuda(), IOUMetric().cuda()]
 
-train_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = True)
-validation_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = False)
+train_step = SupervisedStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = True)
+validation_step = SupervisedStep(model = model, loss = loss, optimizer = optim, metrics = metrics, train = False)
 
 train_loader = AsynchronousLoader(train_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
 validation_loader = AsynchronousLoader(validation_set, device = torch.device('cuda:0'), batch_size = 32, shuffle = True)
@@ -72,8 +72,8 @@ validation_loader = AsynchronousLoader(validation_set, device = torch.device('cu
 train_callbacks = [ProgBarCallback(check_queue = True)]
 validation_callback = train_callbacks + [CheckpointCallback(args.model_name, monitor = 'IOUMetric', save_best = True, mode = 'max')]
 
-trainer = Trainer(train_loader, train_step, train_callbacks)
-validator = Trainer(validation_loader, validation_step, validation_callback)
+trainer = SupervisedTrainer(train_loader, train_step, train_callbacks)
+validator = SupervisedTrainer(validation_loader, validation_step, validation_callback)
 
 for i in range(args.epochs):
     print('Training Epoch {}'.format(i))

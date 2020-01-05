@@ -1,3 +1,3 @@
-from .trainers import Trainer
+from .trainers import SupervisedTrainer
 from .loaders import AsynchronousLoader
-from .steps import DefaultStep
+from .steps import SupervisedStep

@@ -20,7 +20,7 @@ torch.manual_seed(94103)
 from lighter.datasets.ljspeech import LJSpeechDataset
 from lighter.datasets.transforms import Numpy2Tensor, Char2Vec, FixLength1D, Permute, QuantiseULaw, ExpandULaw, Normalize, SampleSequence1D
 
-from lighter.train import Trainer, AsynchronousLoader, DefaultStep
+from lighter.train import SupervisedTrainer, AsynchronousLoader, SupervisedStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy
 

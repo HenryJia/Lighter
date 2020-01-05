@@ -23,7 +23,7 @@ torch.manual_seed(94103)
 from lighter.datasets.ljspeech import LJSpeechDataset
 from lighter.datasets.transforms import Numpy2Tensor, Char2Vec, FixLength1D, Permute, QuantiseULaw, ExpandULaw, Normalize, SampleSequence1D
 
-from lighter.train import Trainer, AsynchronousLoader, DefaultStep
+from lighter.train import SupervisedTrainer, AsynchronousLoader, SupervisedStep
 from lighter.train.callbacks import ProgBarCallback, CheckpointCallback
 from lighter.train.metrics import CategoricalAccuracy
 
@@ -105,14 +105,14 @@ class SoftmaxRMSESTD(nn.Module): # Compute the RMSE as a fraction of the standar
 loss = nn.CrossEntropyLoss().cuda()
 metrics = [CategoricalAccuracy().to(device = torch.device(args['device'])), SoftmaxRMSESTD().to(device = torch.device(args['device']))]
 
-train_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
-validation_step = DefaultStep(model = model, loss = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
+train_step = SupervisedStep(model = model, loss = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
+validation_step = SupervisedStep(model = model, loss = loss, optimizer = optim, metrics = metrics, use_amp = args['use_amp'])
 
 train_callbacks = [ProgBarCallback(check_queue = True)]
 validation_callback = train_callbacks + [CheckpointCallback(args['model_name'], monitor = 'CategoricalAccuracy', save_best = True, mode = 'max')]
 
-trainer = Trainer(train_loader, train_step, train_callbacks)
-validator = Trainer(validation_loader, validation_step, validation_callback)
+trainer = SupervisedTrainer(train_loader, train_step, train_callbacks)
+validator = SupervisedTrainer(validation_loader, validation_step, validation_callback)
 
 
 for i in range(args['epochs']):

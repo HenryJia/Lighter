@@ -13,29 +13,31 @@ import tqdm
 from tqdm import tqdm
 tqdm.monitor_interval = 0
 
-class Trainer(object):
+
+
+class SupervisedTrainer(object):
     """
-    The class that holds everything together
+    Performs supervised training and callbacks using step and loader
 
     Parameters
     ----------
     loader: Finite iterator
         The loader is a finite iterator which must return a sample at each iteration
     step: callable
-        step is a callable which executes one iteration of optimisation which called
-        step should return the statistics which should be tracked by callbacks in the form of a namedtuple
+        step is a callable which executes one iteration of optimisation when called
+        step should return the statistics which should be tracked by callbacks in the form of a StepReport
         Other formats may be used but a namedtuple should be used if possible for consistency
         step should accept the sample as argument when called
     callbacks: list of callables
         callbacks should be a list of callable classes which handle statistics tracking and outputs of training/evaluation/prediction
-        callbacks should take the output from step, the instance of the Trainer which has it and the batch number as a member as arguments
+        callbacks should take the output from step, the instance of the SupervisedTrainer which has it and the batch number as a member as arguments
     queue_size: Integer
         Size of the queue for the outputs to feed to callbacks
         Set to 0 for infinite length queue
         Infinite queue would mean that training is never slowed by callbacks
         But it would eat up more memory as increasing number of outputs are stored
     """
-    def __init__(self, loader, step, callbacks, queue_size = 10):
+    def __init__(self, loader, step, callbacks, queue_size=10):
         self.loader = loader
         self.step = step
         self.callbacks = callbacks

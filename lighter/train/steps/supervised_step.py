@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import torch
 from torch import Tensor
 import torch.nn as nn
@@ -8,17 +6,13 @@ from torch.optim import Adam
 
 from apex import amp
 
+from .steps import StepReport
 
 
-@dataclass(frozen = True)
-class StepReport(object):
-    outputs: dict
-    losses: dict
-    metrics: dict
 
-class DefaultStep(object):
+class SupervisedStep(object):
     """
-    The default step class that runs basic supervised training
+    The default supervised step class that runs basic supervised training
 
     This is pretty much the most basic possible step. It just handles runnign the model and applying the loss and metrics
 
@@ -39,7 +33,7 @@ class DefaultStep(object):
     use_amp: Boolean
         Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, model, loss, optimizer, metrics = [], train = True, use_amp = False):
+    def __init__(self, model, loss, optimizer, metrics=[], train=True, use_amp=False):
         self.model = model
         self.loss = loss
         self.optimizer = optimizer
@@ -69,4 +63,4 @@ class DefaultStep(object):
             # Compute the metrics
             metrics = [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
 
-        return StepReport(outputs = {'out': out.detach()}, losses = {'loss': loss.item()}, metrics = dict(metrics))
+        return StepReport(outputs = {'out': out.detach()}, losses = {'loss': loss.item()}, metrics=dict(metrics))

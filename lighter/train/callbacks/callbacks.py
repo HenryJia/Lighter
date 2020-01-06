@@ -6,8 +6,24 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 
+class Callback(object):
+    """
+    Abstract base class for all callbacks
 
-class MovingAvgCallback(object):
+    Lists all the basic functions required
+    """
+    def epoch_begin(self, cls):
+        pass
+
+    def __call__(self, report, cls, n):
+        pass
+
+    def epoch_end(self, cls):
+        pass
+
+
+
+class MovingAvgCallback(Callback):
     """
     Basic callback to keep a moving average of training/evaluation statistics
     This callback has no outputs, and is designed to be used by as a base class for any other moving average based callbacks
@@ -20,7 +36,7 @@ class MovingAvgCallback(object):
         will be displayed as-is. All others will be averaged
         by the progbar before display.
     """
-    def __init__(self, stateful_metrics = None, **kwargs):
+    def __init__(self, stateful_metrics=None, **kwargs):
         if stateful_metrics:
             self.stateful_metrics = set(stateful_metrics)
         else:
@@ -28,7 +44,7 @@ class MovingAvgCallback(object):
 
 
     def epoch_begin(self, cls):
-        self.avg = {} # Dictionary of averages for the metrics and values
+        self.avg = {}  # Dictionary of averages for the metrics and values
         self._accumulator = {}
         self._seen_so_far = 0
 
@@ -62,24 +78,29 @@ class ProgBarCallback(MovingAvgCallback):
     """
     Basic callback to display a progress bar using tqdm
 
+    Subclass of the moving average callback to make life easier
+
     Parameters
     ----------
+    total: Integer or None
+        The total length of the progress bar. If none, obtain it from the loader of the trainer.
+        Note: if this is set to 0, then the tqdm progress bar won't actually have a bar, just the numbers.
     description: string
         Description of the progress bar
     check_queue: boolean
         Display whether the queue is empty for AsynchronousLoader
     """
-    def __init__(self, description = None, check_queue = False, **kwargs):
+    def __init__(self, total=None, description=None, check_queue=False, **kwargs):
         super(ProgBarCallback, self).__init__(**kwargs)
+        self.total = total
         self.description = description
         self.check_queue = check_queue
 
-
     def epoch_begin(self, cls):
         super(ProgBarCallback, self).epoch_begin(cls)
-        self.pb = tqdm(total = len(cls.loader))
+        total = self.total if self.total is not None else len(cls.loader)
+        self.pb = tqdm(total=total)
         self.pb.set_description(self.description)
-
 
     def __call__(self, report, cls, n):
         super(ProgBarCallback, self).__call__(report, cls, n)
@@ -89,7 +110,6 @@ class ProgBarCallback(MovingAvgCallback):
 
         self.pb.set_postfix(**self.avg)
         self.pb.update(1)
-
 
     def epoch_end(self, cls):
         super(ProgBarCallback, self).epoch_end(cls)
@@ -112,7 +132,8 @@ class CheckpointCallback(MovingAvgCallback):
     mode: string
         Either 'min' or 'max', so that we know whether the goal is to minimise or maximie the metrics when saving the best
     """
-    def __init__(self, filename, monitor, save_best = False, mode = 'min', **kwargs):
+
+    def __init__(self, filename, monitor, save_best=False, mode='min', **kwargs):
         super(CheckpointCallback, self).__init__(**kwargs)
         self.filename = filename
         self.monitor = monitor
@@ -128,18 +149,19 @@ class CheckpointCallback(MovingAvgCallback):
     def epoch_end(self, cls):
         super(CheckpointCallback, self).epoch_end(cls)
         current = self.avg[self.monitor]
-        if self.save_best: # Only check if best if we want it to
+        if self.save_best:  # Only check if best if we want it to
             if self.prev is None:
-                pass # If this is the first epoch, ignore, we'll set prev to the current results later
+                pass  # If this is the first epoch, ignore, we'll set prev to the current results later
             else:
                 if self.mode == 'min':
                     if self.prev < current:
-                        return # If not minimum, then do nothing
+                        return  # If not minimum, then do nothing
                 elif self.mode == 'max':
                     if self.prev > current:
-                        return # If not maximum, then do nothing
+                        return  # If not maximum, then do nothing
                 else:
-                    raise Exception('mode must be max or min, got {}'.format(self.mode))
+                    raise Exception(
+                        'mode must be max or min, got {}'.format(self.mode))
 
         print('Best epoch so far with metric at {} beating previous best at {}, saving model.'.format(current, self.prev))
         self.prev = current

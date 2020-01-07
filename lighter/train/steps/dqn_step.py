@@ -6,11 +6,11 @@ from torch.optim import Adam
 
 from apex import amp
 
-from .steps import StepReport
+from .steps import StepReport, RLStep
 
 
 
-class DQNStep(object):
+class DQNStep(RLStep):
     """
     The default supervised step class that runs basic supervised training
 
@@ -48,7 +48,7 @@ class DQNStep(object):
         self.use_amp = use_amp
 
 
-    def reset(self): # Reset our environment back to the beginning
+    def episode_begin(self): # Reset our environment back to the beginning
         self.state = self.env.reset()
 
 
@@ -97,22 +97,3 @@ class DQNStep(object):
 
         return StepReport(outputs = {'out': out, 'action': action}, losses={'loss': 0}, metrics=dict(metrics)), done
 
-        #data = [data] if torch.is_tensor(data) else data
-
-        #out = self.model(*data)
-        #loss = self.loss(out, targets)
-
-        #if self.train:
-            #self.optimizer.zero_grad()
-            #if self.use_amp:
-                #with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    #scaled_loss.backward()
-            #else:
-                #loss.backward()
-            #self.optimizer.step()
-
-        #with torch.no_grad():
-            ## Compute the metrics
-            #metrics = [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
-
-        #return StepReport(outputs = {'out': out.detach()}, losses = {'loss': loss.item()}, metrics = dict(metrics))

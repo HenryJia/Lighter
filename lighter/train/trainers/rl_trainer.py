@@ -47,12 +47,15 @@ class RLTrainer(object):
 
 
     def train_loop(self):
-        self.step.reset()
+        self.step.episode_begin()
         for i in range(self.episode_len):
             report, done = self.step()
             self.queue.put_nowait(report)
             if done:
                 break
+        report = self.step.episode_end()
+        if report:
+            self.queue.put_nowait(report)
 
 
     def __next__(self):
@@ -66,7 +69,7 @@ class RLTrainer(object):
         self.worker.start()
 
         i = 0
-        while (self.worker.is_alive() or not self.queue.empty()) and i < self.episode_len:
+        while (self.worker.is_alive() or not self.queue.empty()) and i < self.episode_len + 1:
             out = self.queue.get()
             for c in self.callbacks:
                 c(out, self, i)

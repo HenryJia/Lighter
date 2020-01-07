@@ -6,17 +6,15 @@ from torch.optim import Adam
 
 from apex import amp
 
-from .steps import StepReport, RLStep
+from .steps import StepReport
 
 
 
-class DQNStep(RLStep):
+class DQNStep(object):
     """
-    The default supervised step class that runs basic supervised training
+    The DQN step class that runs basic DQN training
 
-    This is pretty much the most basic possible step. It just handles runnign the model and applying the loss and metrics
-
-    Returns a StepReport containing the outputs of the model, the loss and the metrics
+    Returns a StepReport containing the outputs of the model, the loss and the metrics, and done to indicate the end of an episode
 
     Parameters
     ----------
@@ -48,7 +46,7 @@ class DQNStep(RLStep):
         self.use_amp = use_amp
 
 
-    def episode_begin(self): # Reset our environment back to the beginning
+    def reset(self): # Reset our environment back to the beginning
         self.state = self.env.reset()
 
 

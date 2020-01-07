@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch import distributions
+import torch.nn.functional as F
 
 class EpsilonGreedyPolicy(nn.Module):
     """
@@ -38,3 +39,14 @@ class EpsilonGreedyPolicy(nn.Module):
             return random.randrange(outputs.shape[1])
         else:
             return torch.argmax(outputs, dim=1).item()
+
+
+
+class SoftmaxPolicy(nn.Module):
+    """
+    Softmax policy
+
+    This policy assumes that the softmax has already been applied
+    """
+    def __call__(self, outputs):
+        return distributions.Categorical(outputs).sample().item()

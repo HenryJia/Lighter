@@ -2,6 +2,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import distributions
 from torch.optim import Adam
 
 from apex import amp
@@ -25,8 +26,6 @@ class VPGStep(object):
         Ideally, this should be an OpenAI Gym environment but anything which has the same API works
     model: PyTorch model
         The PyTorch model we want to optimize
-    policy: Policy class
-        Class for policy to apply
     optimizer: PyTorch optimizer
         The PyTorch optimizer we're using
     gamma: Float
@@ -38,10 +37,9 @@ class VPGStep(object):
     use_amp: Boolean
         Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, env, agent, policy, optimizer, gamma=0.9, epsilon=1e-5, metrics=[], train=True, use_amp=False):
+    def __init__(self, env, agent, optimizer, gamma=0.9, epsilon=1e-5, metrics=[], train=True, use_amp=False):
         self.env = env
         self.agent = agent
-        self.policy = policy
         self.optimizer = optimizer
         self.gamma = gamma
         self.epsilon = epsilon
@@ -62,7 +60,7 @@ class VPGStep(object):
 
         state = torch.tensor(self.state).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True)
         out = self.agent(state.view(1, -1))
-        action = self.policy(out)
+        action = distributions.Categorical(out).sample().item()
 
         next_state, reward, done, info = self.env.step(action)
         self.state = next_state if not done else None

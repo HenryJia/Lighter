@@ -33,14 +33,27 @@ class PPOStep(object):
     agent: PyTorch model
         The A2C model we want to optimize.
         Must output 2 separate tensors, 1 being the policy, and one being the state value function
-    update_interval: Integer
-        How many steps to take before we run an update. Set to 0 for update only at the end of an episode
     optimizer: PyTorch optimizer
         The PyTorch optimizer we're using
+    update_interval: Integer
+        How many steps to take before we run an update. Set to 0 for update only at the end of an episode
+    batch_size: Integer
+        Batch size for the updates after we're done running the model
+    epochs:
+        Number of epochs to update for after we're done running the model
     gamma: Float
         Discount factor for computing the loss, default is 0.9
+    clip: Float
+        The clipping parameter of the PPO policy loss function
+    value_weight:
+        Weight assigned to the value loss. Default is 1
+    entropy_weight
+        Weight assigned to the entropy loss to ensure adequate exploration. Default is 1e-4
+    epsilon:
+        Small epsilon fuzz parameter to be used for certain ops
     metrics: List of PyTorch metrics
         A list of PyTorch metrics to apply
+        This currently does not work yet
     train: Boolean
         Whether we are training
     use_amp: Boolean

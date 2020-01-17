@@ -16,7 +16,7 @@ from ...modules.agents.policies import SoftmaxPolicy
 
 class A2CStep(object):
     """
-    The Advantage Actor Critic step class
+    The Advantage Actor Critic training step class
 
     Returns a StepReport containing the outputs of the model, the loss and the metrics
 
@@ -29,14 +29,19 @@ class A2CStep(object):
     agent: PyTorch model
         The A2C model we want to optimize.
         Must output 2 separate tensors, 1 being the policy, and one being the state value function
-    update_interval: Integer
-        How many steps to take before we run an update. Set to 0 for update only at the end of an episode
     optimizer: PyTorch optimizer
         The PyTorch optimizer we're using
+    update_interval: Integer
+        How many steps to take before we run an update. Set to 0 (default) for update only at the end of an episode
+    entropy_weight:
+        Weight assigned to the entropy loss function to ensure adequate exploration
+    epsilon:
+        Small epsilon fuzz parameter to be used for certain ops
     gamma: Float
         Discount factor for computing the loss, default is 0.9
     metrics: List of PyTorch metrics
         A list of PyTorch metrics to apply
+        These currently don't work yet
     train: Boolean
         Whether we are training
     use_amp: Boolean

@@ -30,6 +30,8 @@ class VPGStep(object):
         The PyTorch optimizer we're using
     gamma: Float
         Discount factor for computing the loss, default is 0.9
+    epsilon:
+        Small epsilon fuzz parameter to be used for certain ops
     metrics: List of PyTorch metrics
         A list of PyTorch metrics to apply
     train: Boolean

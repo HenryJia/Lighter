@@ -76,8 +76,8 @@ class PPOStep(object):
         self.use_amp = use_amp
 
         self.state_history = []
-        self.log_probs_old = []
-        self.actions_history = []
+        self.policy_history = []
+        self.action_history = []
         self.done_history = [[False] * len(self.env)]
         self.value_history = []
         self.reward_history = []
@@ -91,8 +91,8 @@ class PPOStep(object):
         self.agent_old = copy.deepcopy(self.agent)
 
         self.state_history = []
-        self.log_probs_old = []
-        self.actions_history = []
+        self.policy_history = []
+        self.action_history = []
         self.done_history = [[False] * len(self.env)]
         self.reward_history = []
 
@@ -105,11 +105,11 @@ class PPOStep(object):
         states = torch.stack(states, dim=0).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True)
 
         # We won't actually need the value, but dividing actor and critic would be unnecessarily complex here
-        out, value = self.agent_old(states)
-        actions = distributions.Categorical(out).sample().tolist()
+        out_distribution, value = self.agent_old(states)
+        actions = out_distribution.sample()
 
         env_out = []
-        for a, e, d in zip(actions, self.env, self.done_history[-1]):
+        for a, e, d in zip(actions.tolist(), self.env, self.done_history[-1]):
             if not d: # Continue the envs that are not done yet
                 env_out += [e.step(a)]
             else: # Otherwise stop and fill the entries with appropriate values
@@ -122,14 +122,14 @@ class PPOStep(object):
 
         if self.train:
             self.state_history.append(states)
-            self.log_probs_old.append(torch.log(out))
-            self.actions_history.append(actions)
+            self.policy_history.append(out_distribution)
+            self.action_history.append(actions)
 
             self.done_history.append(done)
             # Keep rewards out of the GPU, we have to loop through and CPU ops should be a little faster
             self.reward_history.append(torch.tensor(rewards))
 
-            if all(done) or len(self.actions_history) == self.update_interval:
+            if all(done) or len(self.action_history) == self.update_interval:
                 returns = []
                 R = 0
                 # Compute the return at each time step with discount factor
@@ -149,37 +149,30 @@ class PPOStep(object):
                 if returns.shape[0] > 1: # PyTorch returns NaN if you try taking std of an array of size 1
                     returns /= (torch.sum(returns ** 2 * done_mask, dim=0) / (torch.sum(done_mask, dim=0) - 1 + self.epsilon) + self.epsilon)
 
-                states = torch.stack(self.state_history, dim=0)
-                log_probs_old = torch.stack(self.log_probs_old, dim=0)
-                actions = torch.tensor(self.actions_history)
+                states = torch.cat(self.state_history, dim=0)
+                actions = torch.cat(self.action_history, dim=0)
+                log_prob_history = torch.cat([p.log_prob(a) for p, a in zip(self.policy_history, self.action_history)], dim=0).detach()
 
-                # Flatten things out since we no longer actually care about having a separate time dimension
-                # Note: We could have just used cat initially instead of flatten, but it doesn't matter because flatten costs no time as no memory actually gets copied
+                # Note: flatten costs no time as no memory actually gets copied
                 done_mask = done_mask.flatten()
-                states = states.flatten(start_dim=0, end_dim=-2)
-                actions = actions.flatten()
-                log_probs_old = log_probs_old.flatten(start_dim=0, end_dim=-2).detach()
                 returns = returns.flatten()
-
-                log_probs_old = log_probs_old[torch.arange(log_probs_old.shape[0]), actions]
 
                 for i in range(self.epochs):
                     j = 0
                     while j < actions.shape[0]:
                         batch_size = min(actions.shape[0] - j, self.batch_size)
 
-                        probs, value = self.agent(states[j:j + batch_size])
+                        out_distribution, value = self.agent(states[j:j + batch_size])
                         value = value.squeeze()
 
-                        log_probs = torch.log(probs)
                         advantage = (returns[j:j + batch_size] - value).detach()
 
                         # This is a tad slower, but much more numerically stable
-                        ratio = torch.exp(log_probs[torch.arange(batch_size), actions[j:j + batch_size]] - log_probs_old[j:j + batch_size])
+                        ratio = torch.exp(out_distribution.log_prob(actions[j:j + batch_size]) - log_prob_history[j:j + batch_size])
 
                         policy_loss = torch.min(ratio * advantage, torch.clamp(ratio, 1 - self.clip, 1 + self.clip))
                         value_loss = F.smooth_l1_loss(returns[j:j + batch_size], value, reduction='none')
-                        entropy_loss = -torch.sum(probs * log_probs, dim=-1)
+                        entropy_loss = out_distribution.entropy()
 
                         loss = torch.mean(done_mask[j:j + batch_size] * (-policy_loss + self.value_weight * value_loss - self.entropy_weight * entropy_loss))
 
@@ -201,13 +194,13 @@ class PPOStep(object):
                 self.agent_old.load_state_dict(self.agent.state_dict())
 
                 self.state_history = []
-                self.log_probs_old = []
-                self.actions_history = []
+                self.policy_history = []
+                self.action_history = []
                 self.done_history = [self.done_history[-1]]
                 self.value_history = []
                 self.reward_history = []
 
-                return StepReport(outputs = {'out': out.detach(), 'action': actions}, losses={'loss': loss.item()}, metrics=dict(metrics)), all(done)
+                return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': loss.item()}, metrics=dict(metrics)), all(done)
 
-        return StepReport(outputs = {'out': out.detach(), 'action': actions}, losses={'loss': 0}, metrics=dict(metrics)), all(done)
+        return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': 0}, metrics=dict(metrics)), all(done)
 

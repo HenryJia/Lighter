@@ -50,7 +50,8 @@ class RLTrainer(object):
         self.step.reset()
         for i in range(self.episode_len):
             report, done = self.step()
-            self.queue.put_nowait(report)
+            #self.queue.put_nowait(report)
+            self.queue.put(report)
             if done:
                 break
 

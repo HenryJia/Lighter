@@ -15,8 +15,6 @@ class VPGStep(object):
     """
     The Monte Carlo vanilla policy gradient step class
 
-    This is pretty much the most basic possible step. It just handles runnign the model and applying the loss and metrics
-
     Returns a StepReport containing the outputs of the model, the loss and the metrics
 
     Parameters
@@ -26,6 +24,7 @@ class VPGStep(object):
         Ideally, this should be an OpenAI Gym environment but anything which has the same API works
     model: PyTorch model
         The PyTorch model we want to optimize
+        Note the output should be a PyTorch distribtion not a tensor so we can sample and comptue log probs easily
     optimizer: PyTorch optimizer
         The PyTorch optimizer we're using
     gamma: Float
@@ -61,16 +60,16 @@ class VPGStep(object):
         device = next(self.agent.parameters()).device
 
         state = torch.tensor(self.state).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True)
-        out = self.agent(state.view(1, -1))
-        action = distributions.Categorical(out).sample().item()
+        out_distribtion = self.agent(state.view(1, -1))
+        action = out_distribtion.sample()
 
-        next_state, reward, done, info = self.env.step(action)
+        next_state, reward, done, info = self.env.step(action.item())
         self.state = next_state if not done else None
 
         metrics = [('reward', reward)]
 
         if self.train:
-            self.log_probs.append(torch.log(out[:, action]))
+            self.log_probs.append(out_distribtion.log_prob(action))
 
             #reward = torch.tensor(reward).to(device=device, dtype=torch.float32, non_blocking=True)
             # Keep rewards out of PyTorch, we have to loop through and standard python should be a little faster
@@ -100,11 +99,11 @@ class VPGStep(object):
 
                 self.optimizer.step()
 
-                with torch.no_grad():
-                    # Compute the metrics
-                    metrics += [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
+                #with torch.no_grad():
+                    ## Compute the metrics, this does nothing currently
+                    #metrics += [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
 
-                return StepReport(outputs = {'out': out, 'action': action}, losses={'loss': loss.item()}, metrics=dict(metrics)), done
+                return StepReport(outputs = {'out': out_distribtion, 'action': action}, losses={'loss': loss.item()}, metrics=dict(metrics)), done
 
-        return StepReport(outputs = {'out': out.detach(), 'action': action}, losses={'loss': 0}, metrics=dict(metrics)), done
+        return StepReport(outputs = {'out': out_distribtion, 'action': action}, losses={'loss': 0}, metrics=dict(metrics)), done
 

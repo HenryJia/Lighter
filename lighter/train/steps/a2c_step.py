@@ -29,6 +29,7 @@ class A2CStep(object):
     agent: PyTorch model
         The A2C model we want to optimize.
         Must output 2 separate tensors, 1 being the policy, and one being the state value function
+        Note, the policy should be a PyTorch distribution
     optimizer: PyTorch optimizer
         The PyTorch optimizer we're using
     update_interval: Integer
@@ -69,8 +70,8 @@ class A2CStep(object):
     def reset(self): # Reset our environment back to the beginning
         self.states = [e.reset() for e in self.env]
 
-        self.probs = []
-        self.log_probs = []
+        self.policy_history = []
+        self.action_history = []
         self.done_history = [[False] * len(self.env)]
         self.value_history = []
         self.reward_history = []
@@ -82,11 +83,11 @@ class A2CStep(object):
         states = [torch.tensor(s) for s in self.states]
         states = torch.stack(states, dim=0).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True)
 
-        out, value = self.agent(states)
-        actions = distributions.Categorical(out).sample().tolist()
+        out_distribution, value = self.agent(states)
+        actions = out_distribution.sample()
 
         env_out = []
-        for a, e, d in zip(actions, self.env, self.done_history[-1]):
+        for a, e, d in zip(actions.tolist(), self.env, self.done_history[-1]):
             if not d: # Continue the envs that are not done yet
                 env_out += [e.step(a)]
             else: # Otherwise stop and fill the entries with appropriate values
@@ -98,8 +99,8 @@ class A2CStep(object):
         metrics = [('reward', np.mean(rewards))]
 
         if self.train:
-            self.probs.append(out)
-            self.log_probs.append(torch.log(out[torch.arange(len(actions)), actions]))
+            self.policy_history.append(out_distribution)
+            self.action_history.append(actions)
             self.value_history.append(value[:, 0])
 
             self.done_history.append(done)
@@ -126,17 +127,16 @@ class A2CStep(object):
                 if returns.shape[0] > 1: # PyTorch returns NaN if you try taking std of an array of size 1
                     returns /= (torch.sum(returns ** 2 * done_mask, dim=0) / (torch.sum(done_mask, dim=0) - 1 + self.epsilon) + self.epsilon)
 
-                value = torch.stack(self.value_history, dim=0).detach()
+                value = torch.stack(self.value_history, dim=0)
 
-                advantage = done_mask * (returns - value)
+                advantage = done_mask * (returns - value).detach()
 
-                log_probs = torch.stack(self.log_probs, dim=0)
-                probs = torch.stack(self.probs, dim=0)
+                log_probs = torch.stack([p.log_prob(a) for p, a in zip(self.policy_history, self.action_history)], dim=0)
 
-                policy_loss = -torch.sum(log_probs * advantage)
-                value_loss = F.smooth_l1_loss(done_mask * value, done_mask * returns)
-                entropy_loss = -torch.mean(done_mask * torch.sum(probs * torch.log(probs), dim=-1)) # actions dimension will be the last one
-                loss = policy_loss + value_loss - self.entropy_weight * entropy_loss
+                policy_loss = -log_probs * advantage
+                value_loss = F.smooth_l1_loss(value, returns, reduction='none')
+                entropy_loss = torch.stack([p.entropy() for p in self.policy_history], dim=0)
+                loss = torch.mean(done_mask * (policy_loss + value_loss - self.entropy_weight * entropy_loss))
 
                 self.optimizer.zero_grad()
                 if self.use_amp:
@@ -147,9 +147,9 @@ class A2CStep(object):
 
                 self.optimizer.step()
 
-                with torch.no_grad():
-                    # Compute the metrics
-                    metrics += [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
+                #with torch.no_grad():
+                    # Compute the metrics # This currently does nothing
+                    #metrics += [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
 
                 self.probs = []
                 self.log_probs = []
@@ -157,7 +157,7 @@ class A2CStep(object):
                 self.value_history = []
                 self.reward_history = []
 
-                return StepReport(outputs = {'out': out.detach(), 'action': actions}, losses={'loss': loss.item()}, metrics=dict(metrics)), all(done)
+                return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': loss.item()}, metrics=dict(metrics)), all(done)
 
-        return StepReport(outputs = {'out': out.detach(), 'action': actions}, losses={'loss': 0}, metrics=dict(metrics)), all(done)
+        return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': 0}, metrics=dict(metrics)), all(done)
 

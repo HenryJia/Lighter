@@ -61,7 +61,7 @@ class PPOStep(object):
     use_amp: Boolean
         Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, env, agent, optimizer, update_interval=0, batch_size=128, epochs=1, gamma=0.99, clip=0.2, lam=0.97, value_weight=1, entropy_weight=1e-4, epsilon=1e-5, metrics=[], use_amp=False):
+    def __init__(self, env, agent, optimizer, update_interval=0, batch_size=128, epochs=1, gamma=0.99, clip=0.2, lam=0.95, value_weight=1, entropy_weight=1e-4, epsilon=1e-5, metrics=[], use_amp=False):
         self.env = env if type(env) is list else [env]
         self.agent = agent
         self.update_interval = update_interval
@@ -87,7 +87,6 @@ class PPOStep(object):
         # Create a new instance of our agent to pre-allocate the memory
         # This is slightly faster than using deepcopy every time
         self.agent_old = copy.deepcopy(self.agent)
-
 
     def reset(self): # Reset our environment back to the beginning
         self.states = [e.reset() for e in self.env]
@@ -115,7 +114,7 @@ class PPOStep(object):
             env_out = []
             for a, e, d in zip(actions.tolist(), self.env, self.done_history[-1]):
                 if not d: # Continue the envs that are not done yet
-                    env_out += [e.step(a)]
+                    env_out += [e.step(np.array(a))]
                 else: # Otherwise stop and fill the entries with appropriate values
                     env_out += [[np.zeros(states[0].shape), 0, True, None]]
 
@@ -155,7 +154,7 @@ class PPOStep(object):
                     returns.insert(0, R)
 
                 # Time dimension across dimension 0, concurrency/batch dimension across dimension 1
-                returns = torch.stack(returns, dim=0)#.pin_memory().to(device=device, non_blocking=True)
+                returns = torch.stack(returns, dim=0)
 
                 # Do generalised advantage estimation (GAE)
                 if self.lam:
@@ -172,7 +171,7 @@ class PPOStep(object):
                 else:
                     advantage = (returns - value_history)
 
-                advantage = advantage.flatten()
+                advantage = advantage.detach().flatten()
 
                 states = torch.cat(self.state_history, dim=0)
                 actions = torch.cat(self.action_history, dim=0)
@@ -189,8 +188,6 @@ class PPOStep(object):
 
                     out_distribution, value = self.agent(states[j:j + batch_size])
                     value = value[:, 0]
-
-                    #advantage = (returns[j:j + batch_size] - value).detach()
 
                     # This is a tad slower, but much more numerically stable
                     ratio = torch.exp(out_distribution.log_prob(actions[j:j + batch_size]) - log_prob_history[j:j + batch_size])

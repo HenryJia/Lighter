@@ -32,7 +32,7 @@ class AsynchronousLoader(object):
     queue_size: Integer
         Size of the que used to store the data loaded to the device
     """
-    def __init__(self, dataset, device, batch_size = 1, shuffle = False, pin_memory = True, workers = 10, queue_size = 10, **kwargs):
+    def __init__(self, dataset, device, batch_size=1, shuffle=False, pin_memory=True, workers=10, queue_size=10, **kwargs):
         self.dataset = dataset
         self.device = device
         self.batch_size = batch_size
@@ -66,7 +66,7 @@ class AsynchronousLoader(object):
     def __iter__(self):
         assert self.idx == 0, 'idx must be 0 at the beginning of __iter__. Are you trying to run the same instance more than once in parallel?'
         self.idx = 0
-        self.worker = Thread(target = self.load_loop)
+        self.worker = Thread(target=self.load_loop)
         #self.worker.setDaemon(True)
         self.worker.start()
         return self

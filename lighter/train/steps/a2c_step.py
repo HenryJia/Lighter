@@ -57,8 +57,6 @@ class A2CStep(object):
         self.metrics = metrics
         self.use_amp = use_amp
 
-        self.probs = []
-        self.log_probs = []
         self.done_history = [[False] * len(self.env)] # We can't be done on the initial state
         self.value_history = []
         self.reward_history = []
@@ -103,7 +101,7 @@ class A2CStep(object):
         # Keep rewards out of the GPU, we have to loop through and CPU ops should be a little faster
         self.reward_history.append(torch.tensor(rewards).float())
 
-        if all(done) or len(self.probs) == self.update_interval:
+        if all(done) or len(self.action_history) == self.update_interval:
             returns = []
             R = 0
             # Compute the return at each time step with discount factor
@@ -139,7 +137,7 @@ class A2CStep(object):
                 with amp.scale_loss(loss, self.optimizer) as scaled_loss:
                     scaled_loss.backward()
             else:
-                loss.backward()
+                loss.backward(retain_graph=True)
 
             self.optimizer.step()
 
@@ -147,11 +145,12 @@ class A2CStep(object):
                 # Compute the metrics # This currently does nothing
                 #metrics += [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
 
-            self.probs = []
-            self.log_probs = []
-            self.done_history = [self.done_history[-1]] # Keep the last bit so we still know if the environemtn is done
-            self.value_history = []
-            self.reward_history = []
+            if all(done):
+                self.policy_history = []
+                self.action_history = []
+                self.done_history = [self.done_history[-1]] # Keep the last bit so we still know if the environemtn is done
+                self.value_history = []
+                self.reward_history = []
 
             return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': loss.item()}, metrics=dict(metrics)), all(done)
 

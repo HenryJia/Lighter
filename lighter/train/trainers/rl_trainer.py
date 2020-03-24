@@ -46,10 +46,14 @@ class RLTrainer(object):
     def train_loop(self):
         self.step.reset()
         done = False
-        while not done:
+        #while not done:
+        import time
+        t0 = time.time()
+        for i in range(100):
             report, done = self.step()
             #self.queue.put_nowait(report)
             self.queue.put(report)
+        print(time.time() - t0, done)
 
 
     def __next__(self):
@@ -73,3 +77,4 @@ class RLTrainer(object):
         self.worker.join()
         for c in self.callbacks:
             c.epoch_end(self)
+        exit()

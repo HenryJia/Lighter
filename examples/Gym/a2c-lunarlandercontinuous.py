@@ -30,7 +30,7 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--episodes', type=int, default=512, help='Number of episodes to train for')
-parser.add_argument('--envs', type=int, default=2, help='Number of environments to concurrently train on')
+parser.add_argument('--envs', type=int, default=128, help='Number of environments to concurrently train on')
 parser.add_argument('--episode_len', type=int, default=1000, help='Maximum length of an episode')
 parser.add_argument('--gamma', type=float, default=0.99, help='Gamma discount factor')
 parser.add_argument('--entropy_weight', type=float, default=1e-4, help='Gamma discount factor')

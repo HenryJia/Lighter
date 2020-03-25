@@ -30,7 +30,7 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--episodes', type=int, default=512, help='Number of episodes to train for')
-parser.add_argument('--envs', type=int, default=128, help='Number of environments to concurrently train on')
+parser.add_argument('--envs', type=int, default=2, help='Number of environments to concurrently train on')
 parser.add_argument('--episode_len', type=int, default=1000, help='Maximum length of an episode')
 parser.add_argument('--gamma', type=float, default=0.99, help='Gamma discount factor')
 parser.add_argument('--entropy_weight', type=float, default=1e-4, help='Gamma discount factor')
@@ -53,7 +53,7 @@ class Model(nn.Module):
         features = self.features(x)
         mean, log_std = self.policy_out(features).chunk(2, dim=1)
         std = torch.exp(torch.clamp(log_std, -5, 2))
-        return MultivariateNormal(loc=mean, scale_tril=torch.diag_embed(std)), self.value_out(features)
+        return MultivariateNormal(loc=torch.tanh(mean), scale_tril=torch.diag_embed(std)), self.value_out(features)
 
 
 
@@ -64,7 +64,7 @@ optim = Adam(agent.parameters(), lr=args.learning_rate)
 
 env = [gym.make('LunarLanderContinuous-v2') for i in range(args.envs)] # Do it concurrently
 
-train_step = A2CStep(env, agent, optim, update_interval=250, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
+train_step = A2CStep(env, agent, optim, update_interval=0, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
 
 callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['loss', 'reward'])]
 

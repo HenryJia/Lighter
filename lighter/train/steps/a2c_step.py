@@ -106,10 +106,11 @@ class A2CStep(object):
 
         if all(done) or len(self.action_history) == self.update_interval:
             returns = []
+            advantage = []
             R = 0
             # Compute the return at each time step with discount factor
             # Fastest way to do this is to loop backwards through the rewards
-            for r in self.reward_history[::-1]:
+            for i, r in enumerate(self.reward_history[::-1]):
                 R = r + self.gamma * R
                 returns.insert(0, R)
 
@@ -118,6 +119,7 @@ class A2CStep(object):
 
             # Note: the indexing shifts it by one so we're not masking out the final state as the gym env will return done on the final state
             done_mask = 1 - torch.tensor(self.done_history[:-1]).to(device=device, dtype=torch.float32, non_blocking=True)
+            done_mask = done_mask.detach()
 
             # We have to manually compute mean and std since we need to mask the envs which are done
             returns = (returns - torch.sum(returns * done_mask, dim=0) / (torch.sum(done_mask, dim=0) + self.epsilon))
@@ -126,7 +128,12 @@ class A2CStep(object):
 
             value = torch.stack(self.value_history, dim=0)
 
-            advantage = done_mask * (returns - value).detach()
+            # For A2C we need to add the final value function to our finite horizon returns to make it infinite horizon
+            # Though we need to remember we need to find the last value function using the done_mask
+            terminal_mask = done_mask - torch.cat([done_mask[1:], torch.zeros(1, len(self.envs)).to(device=device, dtype=torch.float32, non_blocking=True)], dim=0)
+            #returns = returns + torch.sum(terminal_mask * value, dim=0).detach()
+
+            advantage = done_mask * (returns + torch.sum(terminal_mask * value, dim=0) - value).detach()
 
             log_probs = torch.stack([p.log_prob(a) for p, a in zip(self.policy_history, self.action_history)], dim=0)
 

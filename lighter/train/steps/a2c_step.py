@@ -1,6 +1,4 @@
-#from threading import Thread, Lock
-#from queue import Queue
-from multiprocessing import Process, Lock, Queue, Pipe
+from multiprocessing import Process, Lock, Pipe
 import time
 
 import numpy as np
@@ -21,12 +19,13 @@ class EnvPool(object):
     def __init__(self, envs):
         self.envs = envs
 
-        #self.workers = [Thread(target=self.run_env, args=(i,)) for i in range(len(envs))]
+        # I would like to use threading instead of multiprocessing but Python's GIL is a bitch
         self.pipes = [Pipe() for i in range(len(envs))]
-        self.workers = [Process(target=self.run_env, args=(i, self.pipes[i][1])) for i in range(len(envs))]
+        self.workers = [Process(target=self.run_env, args=(i, e, self.pipes[i][1])) for i, e in enumerate(envs)]
         self.start = [Lock() for i in range(len(envs))]
         self.finish = [Lock() for i in range(len(envs))]
-        self.out = Queue()
+
+        self.done = [False] * len(self.envs)
 
         # Lock it intially so we don't start running
         for s, f, w in zip(self.start, self.finish, self.workers):
@@ -35,37 +34,49 @@ class EnvPool(object):
             w.start()
 
 
-    def run(self, actions):
+    def run(self, actions, shape): # We need the shape so we can fill done environments with 0s
         self.actions = actions
         # Release our lock to run all our workers in parallel
 
         for i, p in enumerate(self.pipes):
-            p[0].send(actions[i])
+            if not self.done[i]:
+                p[0].send(self.actions[i])
 
-        for s in self.start:
-            s.release()
+        for i, s in enumerate(self.start):
+            if not self.done[i]:
+                s.release()
 
         # Wait for workers to finish the iteration
-        for f in self.finish:
-            f.acquire()
-        #out = list(self.out.queue)
+        for i, f in enumerate(self.finish):
+            if not self.done[i]:
+                f.acquire()
 
-        out = [p[0].recv() for p in self.pipes]
+        out = []
+        for i, p in enumerate(self.pipes):
+            if not self.done[i]:
+                out += [p[0].recv()]
+            else:
+                out += [[np.zeros(shape, dtype=np.float32), 0, True, None]]
+
+        self.done = [o[2] for o in out]
+
         return out
 
 
-    #def run_env(self, idx):
-    def run_env(self, idx, pipe):
+    def run_env(self, idx, env, pipe):
         done = False
         while not done:
             self.start[idx].acquire() # Wait for our main thread to be ready
-            #state, rewards, done, info = self.envs[idx].step(self.actions[idx])
             action = pipe.recv()
-            state, rewards, done, info = self.envs[idx].step(action)
-            pipe.send((idx, [state, rewards, done, info]))
-            #self.out.put((idx, [state, rewards, done, info]))
+            state, rewards, done, info = env.step(action)
+            pipe.send([state, rewards, done, info])
             self.finish[idx].release() # Signal to main thread we're done for the iteration
 
+
+    def __del__(self):
+        for w in self.workers:
+            w.join() # If we destroy the pool wait for all workers to join
+            w.close()
 
 
 class A2CStep(object):
@@ -125,52 +136,42 @@ class A2CStep(object):
         self.value_history = []
         self.reward_history = []
 
-        #self.pool = EnvPool(self.envs)
+        if hasattr(self, 'pool'):
+            del self.pool
+        self.pool = EnvPool(self.envs)
 
 
     def __call__(self): # We don't actually need any data since the environment is a member variable
         device = next(self.agent.parameters()).device
 
-        t0 = time.time()
+        #t0 = time.time()
         states = [torch.tensor(s).float() for s in self.states]
         states = torch.stack(states, dim=0).pin_memory().to(device=device, non_blocking=True)
-        print('states2gpu', time.time() - t0)
+        #print('states2gpu', time.time() - t0)
 
-        t0 = time.time()
+        #t0 = time.time()
         out_distribution, value = self.agent(states)
         actions = out_distribution.sample()
-        print('agent', time.time() - t0)
+        #print('agent', time.time() - t0)
 
-        t0 = time.time()
-        #env_out = []
+        #t0 = time.time()
+        #env_out = []        print('no update', all(done))
+
         #for a, e, d in zip(actions.tolist(), self.envs, self.done_history[-1]):
             #if not d: # Continue the envs that are not done yet
                 #env_out += [e.step(a)]
             #else: # Otherwise stop and fill the entries with appropriate values
                 #env_out += [[np.zeros(states[0].shape), 0, True, None]]
-        env_out = self.pool.run([a[0] for a in np.split(actions.cpu().numpy(), len(self.envs))])
-        print('env', time.time() - t0)
+        env_out = self.pool.run([a[0] for a in np.split(actions.cpu().numpy(), len(self.envs))], states[0].shape)
+        #print('env', time.time() - t0)
 
 
-        t0 = time.time()
-        env_out = dict(env_out)
-        next_states = []
-        rewards = []
-        done = []
-        for i in range(len(self.envs)):
-            if i in env_out.keys():
-                next_states += [env_out[i][0]]
-                rewards += [env_out[i][1]]
-                done += [env_out[i][2]]
-            else:
-                next_states += [np.zeros(states[0].shape)]
-                rewards += [0]
-                done += [True]
-        #next_states, rewards, done, info = list(zip(*env_out)) # Use the zip transposition trick
+        #t0 = time.time()
+        next_states, rewards, done, info = list(zip(*env_out)) # Use the zip transposition trick
         self.states = next_states
-        print('reorg', time.time() - t0)
+        #print('reorg', time.time() - t0)
 
-        t0 = time.time()
+        #t0 = time.time()
         metrics = [('reward', np.mean(np.array(rewards)[~np.array(self.done_history[-1])]))]
 
         self.policy_history.append(out_distribution)
@@ -180,9 +181,7 @@ class A2CStep(object):
         self.done_history.append(done)
         # Keep rewards out of the GPU, we have to loop through and CPU ops should be a little faster
         self.reward_history.append(torch.tensor(rewards).float())
-        print('post', time.time() - t0)
-
-        return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': 0}, metrics=dict(metrics)), all(done)
+        #print('post', time.time() - t0)
 
         if all(done) or len(self.action_history) == self.update_interval:
             returns = []

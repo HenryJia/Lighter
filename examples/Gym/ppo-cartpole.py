@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--episodes', type=int, default=64, help='Number of episodes to train for')
+parser.add_argument('--episodes', type=int, default=256, help='Number of episodes to train for')
 parser.add_argument('--envs', type=int, default=2, help='Number of environments to concurrently train on')
 parser.add_argument('--episode_len', type=int, default=500, help='Maximum length of an episode')
 parser.add_argument('--gamma', type=float, default=0.99, help='Gamma discount factor')
@@ -58,12 +58,10 @@ agent = agent.to(torch.device(args.device))
 
 optim = Adam(agent.parameters(), lr=args.learning_rate)
 
-env = [gym.make('CartPole-v1') for i in range(args.envs)] # Do it concurrently
-recorder = VideoRecorder(env[0], path='./dqn-cartpole.mp4')
-#env = gym.make('CartPole-v1')
-#recorder = VideoRecorder(env, path='./dqn-cartpole.mp4')
+env = gym.make('CartPole-v1')
+recorder = VideoRecorder(env, path='./ppo-cartpole.mp4')
 
-train_step = PPOStep(env, agent, optim, update_interval=0, batch_size=128, epochs=100, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
+train_step = PPOStep(env, agent, optim, update_interval=0, batch_size=128, epochs=10, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
 
 callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['loss', 'reward'])]
 
@@ -73,7 +71,6 @@ for i in range(args.episodes):
     print('Episode', i)
     next(trainer)
 
-env = env[0]
 state = env.reset()
 state = torch.from_numpy(state.astype(np.float32)).to(torch.device(args.device))
 

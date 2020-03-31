@@ -63,10 +63,11 @@ class PPOStep(object):
     use_amp: Boolean
         Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, env, agent, optimizer_policy, optimizer_value, update_interval=0, batch_size=128, epochs=1, gamma=0.99, clip=0.2, target_kl=0.01, lam=0.95, value_weight=1, entropy_weight=1e-4, epsilon=1e-5, metrics=[], use_amp=False):
+    def __init__(self, env, actor, critic, optimizer_policy, optimizer_value, update_interval=0, batch_size=64, epochs=1, gamma=0.99, clip=0.2, target_kl=0.01, lam=0.97, value_weight=1, entropy_weight=1e-4, epsilon=1e-5, metrics=[], use_amp=False):
         #self.env = env if type(env) is list else [env]
         self.env = env
-        self.agent = agent
+        self.actor = actor
+        self.critic = critic
         self.update_interval = update_interval
         self.batch_size=batch_size
         self.epochs=epochs
@@ -110,7 +111,7 @@ class PPOStep(object):
 
 
     def __call__(self): # We don't actually need any data since the environment is a member variable
-        device = next(self.agent.parameters()).device
+        device = next(self.actor.parameters()).device
 
         with torch.no_grad():
             #states = [torch.tensor(s).float() for s in self.states]
@@ -130,11 +131,16 @@ class PPOStep(object):
             #next_states, rewards, done, info = list(zip(*env_out)) # Use the zip transposition trick
 
             state = torch.tensor(self.state).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True).view(1, -1)
-            out_distribution, value = self.agent(state)
+            out_distribution = self.actor(state)
             action = out_distribution.sample()
 
             next_state, reward, done, info = self.env.step(action.cpu().numpy()[0])
             self.state = next_state
+
+            if done:
+                value = torch.zeros(1, 1).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True)
+            else:
+                value = self.critic(state)
 
             metrics = [('reward', reward)]
 
@@ -184,53 +190,61 @@ class PPOStep(object):
                 actions = torch.cat(self.action_history, dim=0)
                 log_prob_history = torch.cat([p.log_prob(a) for p, a in zip(self.policy_history, self.action_history)], dim=0)
 
-            early_stop = False
+            permutations = np.random.permutation(actions.shape[0])
             for i in range(self.epochs):
                 j = 0
                 while j < actions.shape[0]:
                     batch_size = min(actions.shape[0] - j, self.batch_size)
+                    perm = permutations[j:j + batch_size]
 
-                    out_distribution, value = self.agent(states[j:j + batch_size])
-                    value = value[:, 0]
+                    out_distribution = self.actor(states[perm])
 
                     # This might be a tad slower, but much more numerically stable
-                    ratio = torch.exp(out_distribution.log_prob(actions[j:j + batch_size]) - log_prob_history[j:j + batch_size])
+                    ratio = torch.exp(out_distribution.log_prob(actions[perm]) - log_prob_history[perm])
 
-                    #approx_kl = (log_prob_history[j:j + batch_size] - out_distribution.log_prob(actions[j:j + batch_size])).mean().item()
-                    #if not early_stop and approx_kl > 1.5 * self.target_kl:
-                        #print('Early stopping policy updates at approx_kl = {}, epoch {}, batch {}'.format(approx_kl, i, j))
-                        #early_stop = True
+                    approx_kl = (log_prob_history[perm] - out_distribution.log_prob(actions[perm])).mean().item()
+                    if self.target_kl and approx_kl > 1.5 * self.target_kl:
+                        print('Early stopping policy updates at approx_kl = {}, epoch {}, batch {}'.format(approx_kl, i, j))
+                        break
 
-                    policy_loss = torch.mean(torch.min(ratio * advantage[j:j + batch_size], torch.clamp(ratio, 1 - self.clip, 1 + self.clip) * advantage[j:j + batch_size]))
-                    #policy_loss = torch.min(ratio * advantage, torch.clamp(ratio, 1 - self.clip, 1 + self.clip) * advantage)
-                    #value_loss = F.smooth_l1_loss(returns[j:j + batch_size], value, reduction='none')
+                    policy_loss = torch.mean(torch.min(ratio * advantage[perm], torch.clamp(ratio, 1 - self.clip, 1 + self.clip) * advantage[perm]))
                     entropy_loss = torch.mean(out_distribution.entropy())
 
-                    value_loss = F.mse_loss(returns[j:j + batch_size], value, reduction='mean')
-
                     policy_loss = -policy_loss - self.entropy_weight * entropy_loss
-                    #loss = torch.mean(-policy_loss + self.value_weight * value_loss - self.entropy_weight * entropy_loss)
 
-                    self.optimizer_value.zero_grad()
                     self.optimizer_policy.zero_grad()
                     if self.use_amp:
                         with amp.scale_loss(policy_loss, self.optimizer) as scaled_policy_loss:
                             scaled_policy_loss.backward()
-                        if not early_stop:
-                            with amp.scale_loss(value_loss, self.optimizer) as scaled_value_loss:
-                                scaled_value_loss.backward()
                     else:
-                        if not early_stop:
-                            policy_loss.backward(retain_graph=True)
-                        value_loss.backward()
-
+                        policy_loss.backward()
                     self.optimizer_policy.step()
-                    self.optimizer_value.step()
 
                     j+=batch_size
 
-                #if approx_kl > 1.5 * self.target_kl:
-                    #break
+                if self.target_kl and approx_kl > 1.5 * self.target_kl:
+                    break
+
+            permutations = np.random.permutation(actions.shape[0])
+            for i in range(self.epochs):
+                j = 0
+                while j < actions.shape[0]:
+                    batch_size = min(actions.shape[0] - j, self.batch_size)
+                    perm = permutations[j:j + batch_size]
+
+                    value = self.critic(states[perm])[:, 0]
+
+                    value_loss = F.mse_loss(returns[perm], value, reduction='mean')
+
+                    self.optimizer_value.zero_grad()
+                    if self.use_amp:
+                        with amp.scale_loss(value_loss, self.optimizer) as scaled_value_loss:
+                            scaled_value_loss.backward()
+                    else:
+                        value_loss.backward()
+                    self.optimizer_value.step()
+
+                    j+=batch_size
 
             #with torch.no_grad():
                 # Compute the metrics, this is disabled for now

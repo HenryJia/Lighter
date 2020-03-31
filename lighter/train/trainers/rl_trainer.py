@@ -37,19 +37,22 @@ class RLTrainer(object):
         Infinite queue would mean that training is never slowed by callbacks
         But it would eat up more memory as increasing number of outputs are stored
     """
-    def __init__(self, step, callbacks, queue_size=10):
+    def __init__(self, step, callbacks, max_len=None, queue_size=10):
         self.step = step
         self.callbacks = callbacks
+        self.max_len = max_len
         self.queue_size = queue_size
 
 
     def train_loop(self):
         self.step.reset()
         done = False
-        while not done:
+        i = 0
+        while not done and i < self.max_len:
             report, done = self.step()
             #self.queue.put_nowait(report)
             self.queue.put(report)
+            i += 1
 
 
     def __next__(self):

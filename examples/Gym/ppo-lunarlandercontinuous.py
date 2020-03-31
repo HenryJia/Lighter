@@ -29,80 +29,89 @@ from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--episodes', type=int, default=1024, help='Number of episodes to train for')
+parser.add_argument('--episodes', type=int, default=500, help='Number of episodes to train for')
 parser.add_argument('--envs', type=int, default=2, help='Number of environments to concurrently train on')
 parser.add_argument('--episode_len', type=int, default=1000, help='Maximum length of an episode')
-parser.add_argument('--gamma', type=float, default=0.995, help='Gamma discount factor')
+parser.add_argument('--gamma', type=float, default=0.99, help='Gamma discount factor')
 parser.add_argument('--entropy_weight', type=float, default=1e-4, help='Gamma discount factor')
 parser.add_argument('--policy_learning_rate', type=float, default=3e-4, help='Learning rate')
-parser.add_argument('--value_learning_rate', type=float, default=1e-4, help='Learning rate')
+parser.add_argument('--value_learning_rate', type=float, default=3e-4, help='Learning rate')
 parser.add_argument('--device', default='cuda:0', type=str, help='Which CUDA device to use')
 args, unknown_args = parser.parse_known_args()
 
 
 
-class Model(nn.Module):
+class Actor(nn.Module):
     def __init__(self):
-        super(Model, self).__init__()
+        super(Actor, self).__init__()
 
         self.policy_out = nn.Sequential(nn.Linear(8, 256),
                                         nn.ReLU(),
                                         nn.Linear(256, 256),
                                         nn.ReLU(),
                                         nn.Linear(256, 4))
-        self.value_out = nn.Sequential(nn.Linear(8, 256),
-                                      nn.ReLU(),
-                                      nn.Linear(256, 256),
-                                      nn.ReLU(),
-                                      nn.Linear(256, 1))
 
 
     def forward(self, x):
         mean, log_std = self.policy_out(x).chunk(2, dim=1)
         std = torch.exp(torch.clamp(log_std, -5, 2))
-        return MultivariateNormal(loc=mean, scale_tril=torch.diag_embed(std)), self.value_out(x)
+        return MultivariateNormal(loc=mean, scale_tril=torch.diag_embed(std))
 
 
 
-agent = Model()
-agent = agent.to(torch.device(args.device))
+actor = Actor()
+actor = actor.to(torch.device(args.device))
+critic = nn.Sequential(nn.Linear(8, 256),
+                       nn.ReLU(),
+                       nn.Linear(256, 256),
+                       nn.ReLU(),
+                       nn.Linear(256, 1))
+critic = critic.to(torch.device(args.device))
 
-optim_policy = Adam(agent.policy_out.parameters(), lr=args.policy_learning_rate)
-optim_value = Adam(agent.value_out.parameters(), lr=args.value_learning_rate)
+optim_policy = Adam(actor.parameters(), lr=args.policy_learning_rate)
+optim_value = Adam(critic.parameters(), lr=args.value_learning_rate)
 
 env = gym.make('LunarLanderContinuous-v2')
 
-train_step = PPOStep(env, agent, optim_policy, optim_value, update_interval=0, batch_size=64, epochs=10, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
+train_step = PPOStep(env, actor, critic, optim_policy, optim_value, update_interval=0, batch_size=64, epochs=10, target_kl=None, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
 
 callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['policy_loss', 'value_loss', 'reward'])]
 
-trainer = RLTrainer(train_step, callbacks)
+trainer = RLTrainer(train_step, callbacks, max_len=args.episode_len)
 
 for i in range(args.episodes):
     print('Episode', i)
     next(trainer)
 
-#env = gym.make('LunarLanderContinuous-v2')
-recorder = VideoRecorder(env, path='./ppo-lunarlandercontinuous.mp4')
+#recorder = VideoRecorder(env, path='./ppo-lunarlandercontinuous.mp4')
 
+total_reward_avg = 0
 for i in range(100):
     state = env.reset()
     state = torch.from_numpy(state.astype(np.float32)).to(torch.device(args.device))
+    total_reward = 0
     for j in range(args.episode_len):
         with torch.no_grad():
-            recorder.capture_frame()
-            out_distribution, value = agent(state.view(1, -1))
+            #recorder.capture_frame()
+            out_distribution = actor(state.view(1, -1))
             action = out_distribution.mean.squeeze().cpu().numpy()
 
             next_state, reward, done, info = env.step(action)
 
             state = torch.from_numpy(next_state.astype(np.float32)).to(torch.device(args.device))
 
+            total_reward += reward
             if done:
                 break;
 
-    print('Total reward', reward)
+    print('Total reward', total_reward)
+    total_reward_avg += total_reward
+
+print('Total reward averaged over 100 consecutive trials', total_reward_avg / 100)
 
 recorder.close()
 env.close()
+
+torch.save(actor.state_dict(), 'ppo-actor.pth')
+torch.save(critic.state_dict(), 'ppo-critic.pth')
 

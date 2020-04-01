@@ -16,9 +16,7 @@ torch.manual_seed(94103)
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import MultivariateNormal
-from torch.optim import Adam, RMSprop
-from torchvision.transforms import Compose, Lambda
-from torch.utils.data import SubsetRandomSampler
+from torch.optim import Adam
 
 from lighter.utils.rl_utils import RingBuffer
 from lighter.train.steps import PPOStep
@@ -29,7 +27,7 @@ from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--episodes', type=int, default=500, help='Number of episodes to train for')
+parser.add_argument('--episodes', type=int, default=600, help='Number of episodes to train for')
 parser.add_argument('--envs', type=int, default=2, help='Number of environments to concurrently train on')
 parser.add_argument('--episode_len', type=int, default=1000, help='Maximum length of an episode')
 parser.add_argument('--gamma', type=float, default=0.99, help='Gamma discount factor')
@@ -73,7 +71,7 @@ optim_value = Adam(critic.parameters(), lr=args.value_learning_rate)
 
 env = gym.make('LunarLanderContinuous-v2')
 
-train_step = PPOStep(env, actor, critic, optim_policy, optim_value, update_interval=0, batch_size=64, epochs=10, target_kl=None, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
+train_step = PPOStep(env, actor, critic, optim_policy, optim_value, update_interval=0, batch_size=64, epochs=10, target_kl=None, gamma=args.gamma, entropy_weight=args.entropy_weight, clip=0.2, use_amp=False)
 
 callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['policy_loss', 'value_loss', 'reward'])]
 
@@ -82,8 +80,8 @@ trainer = RLTrainer(train_step, callbacks, max_len=args.episode_len)
 for i in range(args.episodes):
     print('Episode', i)
     next(trainer)
-
-#recorder = VideoRecorder(env, path='./ppo-lunarlandercontinuous.mp4')
+    if i > 500:
+        train_step.clip = 0.05
 
 total_reward_avg = 0
 for i in range(100):
@@ -92,7 +90,6 @@ for i in range(100):
     total_reward = 0
     for j in range(args.episode_len):
         with torch.no_grad():
-            #recorder.capture_frame()
             out_distribution = actor(state.view(1, -1))
             action = out_distribution.mean.squeeze().cpu().numpy()
 
@@ -109,7 +106,6 @@ for i in range(100):
 
 print('Total reward averaged over 100 consecutive trials', total_reward_avg / 100)
 
-recorder.close()
 env.close()
 
 torch.save(actor.state_dict(), 'ppo-actor.pth')

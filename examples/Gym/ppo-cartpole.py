@@ -61,7 +61,7 @@ optim = Adam(agent.parameters(), lr=args.learning_rate)
 env = gym.make('CartPole-v1')
 recorder = VideoRecorder(env, path='./ppo-cartpole.mp4')
 
-train_step = PPOStep(env, agent, optim, update_interval=0, batch_size=128, epochs=10, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
+train_step = PPOStep(env, agent, optim, update_interval=0, batch_size=np.inf, epochs=100, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
 
 callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['loss', 'reward'])]
 

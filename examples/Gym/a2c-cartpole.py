@@ -28,50 +28,49 @@ from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--episodes', type=int, default=64, help='Number of episodes to train for')
-parser.add_argument('--envs', type=int, default=32, help='Number of environments to concurrently train on')
+parser.add_argument('--episodes', type=int, default=200, help='Number of episodes to train for')
 parser.add_argument('--episode_len', type=int, default=500, help='Maximum length of an episode')
 parser.add_argument('--gamma', type=float, default=0.9, help='Gamma discount factor')
-parser.add_argument('--entropy_weight', type=float, default=1e-1, help='Gamma discount factor')
-parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning rate')
+parser.add_argument('--entropy_weight', type=float, default=1e-4, help='Gamma discount factor')
+parser.add_argument('--policy_learning_rate', type=float, default=1e-3, help='Learning rate')
+parser.add_argument('--value_learning_rate', type=float, default=1e-3, help='Learning rate')
 parser.add_argument('--device', default='cuda:0', type=str, help='Which CUDA device to use')
 args, unknown_args = parser.parse_known_args()
 
-class Model(nn.Module):
+class Actor(nn.Module):
     def __init__(self):
-        super(Model, self).__init__()
-        self.features = nn.Sequential(nn.Linear(4, 256),
-                                      nn.Tanh())
-        self.policy_out = nn.Sequential(nn.Linear(256, 2),
+        super(Actor, self).__init__()
+        self.policy_out = nn.Sequential(nn.Linear(4, 256),
+                                        nn.Tanh(),
+                                        nn.Linear(256, 2),
                                         nn.Softmax(dim=1))
-        self.value_out = nn.Linear(256, 1)
-
 
     def forward(self, x):
-        features = self.features(x)
-        return Categorical(self.policy_out(features)), self.value_out(features)
+        return Categorical(self.policy_out(x))
 
+actor = Actor()
+actor = actor.to(torch.device(args.device))
+critic = nn.Sequential(nn.Linear(4, 256),
+                       nn.Tanh(),
+                       nn.Linear(256, 1))
+critic = critic.to(torch.device(args.device))
 
+optim_policy = Adam(actor.parameters(), lr=args.policy_learning_rate)
+optim_value = Adam(critic.parameters(), lr=args.value_learning_rate)
 
-agent = Model()
-agent = agent.to(torch.device(args.device))
+env = gym.make('CartPole-v1')
+recorder = VideoRecorder(env, path='./a2c-cartpole.mp4')
 
-optim = Adam(agent.parameters(), lr=args.learning_rate)
+train_step = A2CStep(env, actor, critic, optim_policy, optim_value, update_interval=0, gamma=args.gamma, entropy_weight=args.entropy_weight)
 
-env = [gym.make('CartPole-v1') for i in range(args.envs)] # Do it concurrently
-recorder = VideoRecorder(env[0], path='./a2c-cartpole.mp4')
+callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['policy_loss', 'value_loss', 'reward'])]
 
-train_step = A2CStep(env, agent, optim, 200, args.gamma, args.entropy_weight, use_amp=False)
-
-callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['loss', 'reward'])]
-
-trainer = RLTrainer(train_step, callbacks)
+trainer = RLTrainer(train_step, callbacks, max_len=args.episode_len)
 
 for i in range(args.episodes):
     print('Episode', i)
     next(trainer)
 
-env = env[0]
 state = env.reset()
 state = torch.from_numpy(state.astype(np.float32)).to(torch.device(args.device))
 
@@ -80,7 +79,7 @@ for j in range(args.episode_len):
     with torch.no_grad():
         recorder.capture_frame()
         state = state
-        out_distribution, value = agent(state.view(1, -1))
+        out_distribution = actor(state.view(1, -1))
         action = torch.argmax(out_distribution.probs, dim=1).item()
 
         next_state, reward, done, info = env.step(action)

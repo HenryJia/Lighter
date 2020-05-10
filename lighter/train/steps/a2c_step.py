@@ -108,7 +108,7 @@ class A2CStep(object):
                 returns.insert(0, R)
 
             # Time dimension across dimension 0, concurrency/batch dimension across dimension 1
-            returns = torch.tensor(returns).to(device=device, non_blocking=True)
+            returns = torch.tensor(returns).to(device=device, dtype=torch.float32, non_blocking=True)
 
             # We have to manually compute mean and std since we need to mask the env which are done
             returns = (returns - torch.mean(returns)) / (torch.std(returns) + self.epsilon)
@@ -130,12 +130,12 @@ class A2CStep(object):
 
             if self.use_amp:
                 with amp.scale_loss(policy_loss, self.optimizer) as scaled_policy_loss:
-                    scaled_policy_loss.backward()
+                    scaled_policy_loss.backward(retain_graph=True)
                 with amp.scale_loss(value_loss, self.optimizer) as scaled_value_loss:
-                    scaled_value_loss.backward()
+                    scaled_value_loss.backward(retain_graph=True)
             else:
-                policy_loss.backward()
-                value_loss.backward()
+                policy_loss.backward(retain_graph=True)
+                value_loss.backward(retain_graph=True)
 
             self.optimizer_policy.step()
             self.optimizer_value.step()

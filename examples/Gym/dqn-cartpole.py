@@ -62,7 +62,7 @@ train_step = DQNStep(env, agent, policy, experiences, optim, args.batch_size, us
 
 callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['reward']), UpdateDQNCallback(agent, args.update_critic)]
 
-trainer = RLTrainer(train_step, callbacks)
+trainer = RLTrainer(train_step, callbacks, max_len=args.episode_len)
 
 for i in range(args.episodes):
     print('Episode', i)

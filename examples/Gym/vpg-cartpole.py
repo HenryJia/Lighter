@@ -60,7 +60,7 @@ train_step = VPGStep(env, agent, optim, args.gamma, use_amp=False)
 
 callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['loss', 'reward'])]
 
-trainer = RLTrainer(train_step, callbacks)
+trainer = RLTrainer(train_step, callbacks, max_len=args.episode_len)
 
 for i in range(args.episodes):
     print('Episode', i)

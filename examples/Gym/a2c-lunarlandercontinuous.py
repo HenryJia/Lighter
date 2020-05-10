@@ -34,41 +34,47 @@ parser.add_argument('--envs', type=int, default=2, help='Number of environments 
 parser.add_argument('--episode_len', type=int, default=1000, help='Maximum length of an episode')
 parser.add_argument('--gamma', type=float, default=0.99, help='Gamma discount factor')
 parser.add_argument('--entropy_weight', type=float, default=1e-4, help='Gamma discount factor')
-parser.add_argument('--learning_rate', type=float, default=3e-4, help='Learning rate')
+parser.add_argument('--policy_learning_rate', type=float, default=3e-4, help='Learning rate')
+parser.add_argument('--value_learning_rate', type=float, default=3e-4, help='Learning rate')
 parser.add_argument('--device', default='cuda:0', type=str, help='Which CUDA device to use')
 args, unknown_args = parser.parse_known_args()
 
-
-
-class Model(nn.Module):
+class Actor(nn.Module):
     def __init__(self):
-        super(Model, self).__init__()
-        self.features = nn.Sequential(nn.Linear(8, 256),
-                                      nn.Tanh())
-        self.policy_out = nn.Linear(256, 4)
-        self.value_out = nn.Linear(256, 1)
+        super(Actor, self).__init__()
+
+        self.policy_out = nn.Sequential(nn.Linear(8, 256),
+                                        nn.ReLU(),
+                                        nn.Linear(256, 256),
+                                        nn.ReLU(),
+                                        nn.Linear(256, 4))
 
 
     def forward(self, x):
-        features = self.features(x)
-        mean, log_std = self.policy_out(features).chunk(2, dim=1)
+        mean, log_std = self.policy_out(x).chunk(2, dim=1)
         std = torch.exp(torch.clamp(log_std, -5, 2))
-        return MultivariateNormal(loc=torch.tanh(mean), scale_tril=torch.diag_embed(std)), self.value_out(features)
+        return MultivariateNormal(loc=mean, scale_tril=torch.diag_embed(std))
 
 
+actor = Actor()
+actor = actor.to(torch.device(args.device))
+critic = nn.Sequential(nn.Linear(8, 256),
+                       nn.ReLU(),
+                       nn.Linear(256, 256),
+                       nn.ReLU(),
+                       nn.Linear(256, 1))
+critic = critic.to(torch.device(args.device))
 
-agent = Model()
-agent = agent.to(torch.device(args.device))
+optim_policy = Adam(actor.parameters(), lr=args.policy_learning_rate)
+optim_value = Adam(critic.parameters(), lr=args.value_learning_rate)
 
-optim = Adam(agent.parameters(), lr=args.learning_rate)
+env = gym.make('LunarLanderContinuous-v2')
 
-env = [gym.make('LunarLanderContinuous-v2') for i in range(args.envs)] # Do it concurrently
+train_step = A2CStep(env, actor, critic, optim_policy, optim_value, update_interval=0, gamma=args.gamma, entropy_weight=args.entropy_weight)
 
-train_step = A2CStep(env, agent, optim, update_interval=0, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
+callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['policy_loss', 'value_loss', 'reward'])]
 
-callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['loss', 'reward'])]
-
-trainer = RLTrainer(train_step, callbacks)
+trainer = RLTrainer(train_step, callbacks, max_len=args.episode_len)
 
 for i in range(args.episodes):
     print('Episode', i)
@@ -82,7 +88,7 @@ state = torch.from_numpy(state.astype(np.float32)).to(torch.device(args.device))
 for j in range(args.episode_len):
     with torch.no_grad():
         recorder.capture_frame()
-        out_distribution, value = agent(state.view(1, -1))
+        out_distribution = actor(state.view(1, -1))
         action = out_distribution.mean.squeeze().cpu().numpy()
 
         next_state, reward, done, info = env.step(action)

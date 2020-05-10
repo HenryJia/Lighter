@@ -28,42 +28,42 @@ from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--episodes', type=int, default=256, help='Number of episodes to train for')
-parser.add_argument('--envs', type=int, default=2, help='Number of environments to concurrently train on')
+parser.add_argument('--episodes', type=int, default=100, help='Number of episodes to train for')
 parser.add_argument('--episode_len', type=int, default=500, help='Maximum length of an episode')
-parser.add_argument('--gamma', type=float, default=0.99, help='Gamma discount factor')
+parser.add_argument('--gamma', type=float, default=0.9, help='Gamma discount factor')
 parser.add_argument('--entropy_weight', type=float, default=1e-4, help='Gamma discount factor')
-parser.add_argument('--learning_rate', type=float, default=3e-4, help='Learning rate')
+parser.add_argument('--policy_learning_rate', type=float, default=1e-3, help='Learning rate')
+parser.add_argument('--value_learning_rate', type=float, default=1e-3, help='Learning rate')
 parser.add_argument('--device', default='cuda:0', type=str, help='Which CUDA device to use')
 args, unknown_args = parser.parse_known_args()
 
-class Model(nn.Module):
+class Actor(nn.Module):
     def __init__(self):
-        super(Model, self).__init__()
-        self.features = nn.Sequential(nn.Linear(4, 256),
-                                      nn.Tanh())
-        self.policy_out = nn.Sequential(nn.Linear(256, 2),
+        super(Actor, self).__init__()
+        self.policy_out = nn.Sequential(nn.Linear(4, 256),
+                                        nn.Tanh(),
+                                        nn.Linear(256, 2),
                                         nn.Softmax(dim=1))
-        self.value_out = nn.Linear(256, 1)
-
 
     def forward(self, x):
-        features = self.features(x)
-        return Categorical(self.policy_out(features)), self.value_out(features)
+        return Categorical(self.policy_out(x))
 
+actor = Actor()
+actor = actor.to(torch.device(args.device))
+critic = nn.Sequential(nn.Linear(4, 256),
+                       nn.Tanh(),
+                       nn.Linear(256, 1))
+critic = critic.to(torch.device(args.device))
 
-
-agent = Model()
-agent = agent.to(torch.device(args.device))
-
-optim = Adam(agent.parameters(), lr=args.learning_rate)
+optim_policy = Adam(actor.parameters(), lr=args.policy_learning_rate)
+optim_value = Adam(critic.parameters(), lr=args.value_learning_rate)
 
 env = gym.make('CartPole-v1')
 recorder = VideoRecorder(env, path='./ppo-cartpole.mp4')
 
-train_step = PPOStep(env, agent, optim, update_interval=0, batch_size=np.inf, epochs=100, gamma=args.gamma, entropy_weight=args.entropy_weight, use_amp=False)
+train_step = PPOStep(env, actor, critic, optim_policy, optim_value, num_steps=args.episode_len, batch_size=64, epochs=10, target_kl=None, gamma=args.gamma, entropy_weight=args.entropy_weight, clip=0.2, update_when_done=True, use_amp=False)
 
-callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['loss', 'reward'])]
+callbacks = [ProgBarCallback(total=args.episode_len, stateful_metrics=['policy_loss', 'value_loss', 'reward'])]
 
 trainer = RLTrainer(train_step, callbacks, args.episode_len)
 
@@ -78,7 +78,8 @@ total_reward = 0
 for j in range(args.episode_len):
     with torch.no_grad():
         recorder.capture_frame()
-        out_distribution, value = agent(state.view(1, -1))
+        state = state
+        out_distribution = actor(state.view(1, -1))
         action = torch.argmax(out_distribution.probs, dim=1).item()
 
         next_state, reward, done, info = env.step(action)

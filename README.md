@@ -10,4 +10,5 @@ OpenAI Gym environments are used to test the RL algorithms and ensure they funct
 
 Other parts of this library of code are from before CS350, though much of it was overhauled and refactored during the development of the CS350 project as it was outdated.
 
-The commit history and git diff between this branch (dev-cs350) and the master branch of Lighter can be used if you wished to distinguish between what was added for the CS350 project and what existed before in Lighter.
+The commit history and git diff between this branch (dev-cs350) and the master branch of Lighter can be used if you wished to distinguish between what was added for the CS350 project and what existed before in Lighter.  
+If you are too unfamiliar with git to do this on your system, Lighter is public on GitHub under the MIT License and you can see the git diff at https://github.com/HenryJia/Lighter/compare/dev-cs350

@@ -47,64 +47,57 @@ class A2CStep(object):
     use_amp: Boolean
         Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, envs, agent, optimizer, update_interval=0, gamma=0.9, entropy_weight=1e-4, epsilon=1e-5, metrics=[], use_amp=False):
-        self.envs = envs if type(envs) is list else [envs]
-        self.agent = agent
+    def __init__(self, env, actor, critic, optimizer_policy, optimizer_value, update_interval=0, gamma=0.9, entropy_weight=1e-4, epsilon=1e-5, metrics=[], use_amp=False):
+        self.env = env
+        self.actor = actor
+        self.critic = critic
         self.update_interval = update_interval
-        self.optimizer = optimizer
+        self.optimizer_policy = optimizer_policy
+        self.optimizer_value = optimizer_value
         self.gamma = gamma
         self.entropy_weight = entropy_weight
         self.epsilon = epsilon
         self.metrics = metrics
         self.use_amp = use_amp
 
-        self.done_history = [[False] * len(self.envs)] # We can't be done on the initial state
+        self.policy_history = []
+        self.action_history = []
         self.value_history = []
         self.reward_history = []
 
 
     def reset(self): # Reset our environment back to the beginning
-        self.states = [e.reset() for e in self.envs]
-
-        self.policy_history = []
-        self.action_history = []
-        self.done_history = [[False] * len(self.envs)]
-        self.value_history = []
-        self.reward_history = []
+        device = next(self.actor.parameters()).device
+        state = self.env.reset()
+        self.state = torch.tensor(state).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True).view(1, -1)
 
 
     def __call__(self): # We don't actually need any data since the environment is a member variable
-        device = next(self.agent.parameters()).device
+        device = next(self.actor.parameters()).device
 
-        states = [torch.tensor(s).float() for s in self.states]
-        states = torch.stack(states, dim=0).pin_memory().to(device=device, non_blocking=True)
+        policy = self.actor(self.state)
+        action = policy.sample()
 
-        out_distribution, value = self.agent(states)
-        actions = out_distribution.sample()
+        next_state, reward, done, info = self.env.step(action.cpu().numpy()[0])
 
-        env_out = []
+        if done:
+            value = torch.zeros((1, ), device=device)
+        else:
+            value = self.critic(self.state)[:, 0]
 
-        for a, e, d in zip(actions.tolist(), self.envs, self.done_history[-1]):
-            if not d: # Continue the envs that are not done yet
-                env_out += [e.step(a)]
-            else: # Otherwise stop and fill the entries with appropriate values
-                env_out += [[np.zeros(states[0].shape), 0, True, None]]
+        # Push this first since we want the input state to the actor to get here not the next one
+        # Then update self.state
+        self.policy_history.append(policy)
+        self.action_history.append(action)
+        self.reward_history.append(reward) # Keep rewards out of the GPU
+        self.value_history.append(value)
+
+        self.state = torch.tensor(next_state).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True).view(1, -1)
+
+        metrics = [('reward', reward)]
 
 
-        next_states, rewards, done, info = list(zip(*env_out)) # Use the zip transposition trick
-        self.states = next_states
-
-        metrics = [('reward', np.mean(np.array(rewards)[~np.array(self.done_history[-1])]))]
-
-        self.policy_history.append(out_distribution)
-        self.action_history.append(actions)
-        self.value_history.append(value[:, 0])
-
-        self.done_history.append(done)
-        # Keep rewards out of the GPU, we have to loop through and CPU ops should be a little faster
-        self.reward_history.append(torch.tensor(rewards).float())
-
-        if all(done) or len(self.action_history) == self.update_interval:
+        if done or len(self.action_history) == self.update_interval:
             returns = []
             advantage = []
             R = 0
@@ -115,54 +108,47 @@ class A2CStep(object):
                 returns.insert(0, R)
 
             # Time dimension across dimension 0, concurrency/batch dimension across dimension 1
-            returns = torch.stack(returns, dim=0).to(device=device, non_blocking=True)
+            returns = torch.tensor(returns).to(device=device, non_blocking=True)
 
-            # Note: the indexing shifts it by one so we're not masking out the final state as the gym env will return done on the final state
-            done_mask = 1 - torch.tensor(self.done_history[:-1]).to(device=device, dtype=torch.float32, non_blocking=True)
-            done_mask = done_mask.detach()
+            # We have to manually compute mean and std since we need to mask the env which are done
+            returns = (returns - torch.mean(returns)) / (torch.std(returns) + self.epsilon)
 
-            # We have to manually compute mean and std since we need to mask the envs which are done
-            returns = (returns - torch.sum(returns * done_mask, dim=0) / (torch.sum(done_mask, dim=0) + self.epsilon))
-            if returns.shape[0] > 1: # PyTorch returns NaN if you try taking std of an array of size 1
-                returns /= (torch.sum(returns ** 2 * done_mask, dim=0) / (torch.sum(done_mask, dim=0) - 1 + self.epsilon) + self.epsilon)
+            value = torch.cat(self.value_history, dim=0)
 
-            value = torch.stack(self.value_history, dim=0)
+            advantage = (returns + value[-1] - value).detach()
 
-            # For A2C we need to add the final value function to our finite horizon returns to make it infinite horizon
-            # Though we need to remember we need to find the last value function using the done_mask
-            terminal_mask = done_mask - torch.cat([done_mask[1:], torch.zeros(1, len(self.envs)).to(device=device, dtype=torch.float32, non_blocking=True)], dim=0)
-            #returns = returns + torch.sum(terminal_mask * value, dim=0).detach()
+            log_probs = torch.cat([p.log_prob(a) for p, a in zip(self.policy_history, self.action_history)], dim=0)
 
-            advantage = done_mask * (returns + torch.sum(terminal_mask * value, dim=0) - value).detach()
+            policy_loss = -torch.mean(log_probs * advantage)
+            value_loss = F.mse_loss(value, returns, reduction='mean')
+            entropy_loss = torch.mean(torch.cat([p.entropy() for p in self.policy_history], dim=0))
 
-            log_probs = torch.stack([p.log_prob(a) for p, a in zip(self.policy_history, self.action_history)], dim=0)
+            policy_loss = policy_loss - self.entropy_weight * entropy_loss
 
-            policy_loss = -log_probs * advantage
-            value_loss = F.smooth_l1_loss(value, returns, reduction='none')
-            entropy_loss = torch.stack([p.entropy() for p in self.policy_history], dim=0)
-            loss = torch.mean(done_mask * (policy_loss + value_loss - self.entropy_weight * entropy_loss))
+            self.optimizer_policy.zero_grad()
+            self.optimizer_value.zero_grad()
 
-            self.optimizer.zero_grad()
             if self.use_amp:
-                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                with amp.scale_loss(policy_loss, self.optimizer) as scaled_policy_loss:
+                    scaled_policy_loss.backward()
+                with amp.scale_loss(value_loss, self.optimizer) as scaled_value_loss:
+                    scaled_value_loss.backward()
             else:
-                loss.backward(retain_graph=True)
+                policy_loss.backward()
+                value_loss.backward()
 
-            self.optimizer.step()
+            self.optimizer_policy.step()
+            self.optimizer_value.step()
 
-            #with torch.no_grad():
-                # Compute the metrics # This currently does nothing
-                #metrics += [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
-
-            if all(done):
+            if done:
                 self.policy_history = []
                 self.action_history = []
-                self.done_history = [self.done_history[-1]] # Keep the last bit so we still know if the environemtn is done
                 self.value_history = []
                 self.reward_history = []
 
-            return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': loss.item()}, metrics=dict(metrics)), all(done)
+            loss = {'policy_loss': policy_loss.item(), 'value_loss': value_loss.item()}
+            return StepReport(outputs = {'out': policy, 'action': action}, losses=loss, metrics=dict(metrics)), done
 
-        return StepReport(outputs = {'out': out_distribution, 'action': actions}, losses={'loss': 0}, metrics=dict(metrics)), all(done)
+        loss = {'policy_loss': 0, 'value_loss': 0}
+        return StepReport(outputs = {'out': policy, 'action': action}, losses=loss, metrics=dict(metrics)), done
 

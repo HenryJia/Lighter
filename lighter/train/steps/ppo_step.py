@@ -159,7 +159,7 @@ class PPOStep(object):
     use_amp: Boolean
         Whether to use NVidia's automatic mixed precision training
     """
-    def __init__(self, env, actor, critic, optimizer_policy, optimizer_value, num_steps=1000, batch_size=64, epochs=1, gamma=0.99, clip=0.2, target_kl=0.01, lam=0.97, value_weight=1, entropy_weight=1e-4, epsilon=1e-5, metrics=[], update_when_done=False, use_amp=False):
+    def __init__(self, env, actor, critic, optimizer_policy, optimizer_value, num_steps=1000, batch_size=64, epochs=1, gamma=0.99, clip=0.2, target_kl=0.01, lam=0.97, value_weight=1, entropy_weight=1e-4, epsilon=1e-5, metrics=[], update_when_done=True, use_amp=False):
         #self.env = env if type(env) is list else [env]
         self.env = env
         self.actor = actor
@@ -194,8 +194,9 @@ class PPOStep(object):
 
 
     def reset(self): # Reset our environment back to the beginning
+        device = next(self.actor.parameters()).device
         state = self.env.reset()
-        self.state = torch.tensor(state).pin_memory().to(device=self.buf.device, dtype=torch.float32, non_blocking=True).view(1, -1)
+        self.state = torch.tensor(state).pin_memory().to(device=device, dtype=torch.float32, non_blocking=True).view(1, -1)
 
 
     def __call__(self): # We don't actually need any data since the environment is a member variable
@@ -296,8 +297,7 @@ class PPOStep(object):
                 j+=batch_size
 
         #with torch.no_grad():
-            # Compute the metrics, this is disabled for now
-            #metrics += [(m.__class__.__name__, m(out, targets).item()) for m in self.metrics]
+            #metrics += [(m.__class__.__name__, m().item()) for m in self.metrics]
 
         loss = {'policy_loss': policy_loss.item(), 'value_loss': value_loss.item()}
         return StepReport(outputs={'out': policy, 'action': action}, losses=loss, metrics=dict(metrics)), done

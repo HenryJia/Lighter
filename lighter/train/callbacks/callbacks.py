@@ -133,8 +133,9 @@ class CheckpointCallback(MovingAvgCallback):
         Either 'min' or 'max', so that we know whether the goal is to minimise or maximie the metrics when saving the best
     """
 
-    def __init__(self, filename, monitor, save_best=False, mode='min', **kwargs):
+    def __init__(self, model, filename, monitor, save_best=False, mode='min', **kwargs):
         super(CheckpointCallback, self).__init__(**kwargs)
+        self.model = model
         self.filename = filename
         self.monitor = monitor
         self.save_best = save_best
@@ -165,4 +166,6 @@ class CheckpointCallback(MovingAvgCallback):
 
         print('Best epoch so far with metric at {} beating previous best at {}, saving model.'.format(current, self.prev))
         self.prev = current
-        torch.save(cls.step.model.state_dict(), self.filename)
+        device = next(self.model.parameters()).device
+        torch.save(self.model.cpu().state_dict(), self.filename)
+        self.model = self.model.to(device=device)

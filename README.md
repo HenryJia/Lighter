@@ -1,10 +1,12 @@
 # Lighter
 A high level library of deep learning tools built on top of PyTorch inspired by PyTorch's Ignite  
 
-This branch of Lighter was developed specifically for the CS350 Datascience project
+This branch of Lighter was developed specifically for the CS350 Datascience project and contains the RL algorithms added
 
-In this branch, the RL algorithms specifically are located in lighter/train/steps/
+The RL algorithms specifically are located in lighter/train/steps/
 Each python file inside each implements a single optimisation step of an RL algorithm. They are then iterated and optimised primarily using lighter/train/trainer/rl\_trainer.py
+
+OpenAI Gym environments are used to test the RL algorithms and ensure they function correctly. Code for this is in examples/Gym/
 
 Other parts of this library of code are from before CS350, though much of it was overhauled and refactored during the development of the CS350 project as it was outdated.
 
